@@ -1,0 +1,30 @@
+:root{
+  --bg:#dae0e6; /* light reddit gray */
+  --card:#ffffff;
+  --accent:#ff4500; /* reddit orange */
+  --muted:#6b6f76;
+  --nav:#161616;
+}
+*{box-sizing:border-box}
+body{font-family:Inter,system-ui,Segoe UI,Arial,Helvetica,sans-serif;background:var(--bg);margin:0;color:#111}
+.container{max-width:1000px;margin:24px auto;padding:0 16px}
+.nav{background:var(--nav);color:#fff;padding:12px 0}
+.nav .inner{max-width:1000px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700}
+.logo .dot{width:22px;height:22px;border-radius:4px;background:var(--accent);display:inline-block}
+.nav a{color:#fff;text-decoration:none}
+.card{background:var(--card);border-radius:8px;box-shadow:0 1px 0 rgba(0,0,0,0.06);padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:1fr 320px;gap:16px}
+.left{min-height:200px}
+.right{min-height:200px}
+.btn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:6px;border:none;cursor:pointer}
+.muted{color:var(--muted)}
+.form-row{margin-bottom:12px}
+.form-row label{display:block;margin-bottom:6px;font-size:14px}
+.form-row input, .form-row textarea{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px}
+.small{font-size:13px}
+.booking-item{display:flex;gap:12px;align-items:flex-start}
+.booking-item .meta{color:var(--muted);font-size:13px}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+.inline-link{color:var(--accent);text-decoration:none}
+.topbar-actions{display:flex;gap:8px;align-items:center}
