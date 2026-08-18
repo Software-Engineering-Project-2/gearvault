@@ -28,3 +28,8 @@ body{font-family:Inter,system-ui,Segoe UI,Arial,Helvetica,sans-serif;background:
 .empty{padding:24px;text-align:center;color:var(--muted)}
 .inline-link{color:var(--accent);text-decoration:none}
 .topbar-actions{display:flex;gap:8px;align-items:center}
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

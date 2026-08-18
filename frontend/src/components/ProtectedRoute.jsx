@@ -6,19 +6,23 @@ export default function ProtectedRoute({ children }){
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)
 
-  useEffect(()=>{
+  useEffect(() => {
     let mounted = true
-    supabase.auth.getSession().then(({ data })=>{
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
-      setSession(data.session)
+      setSession(data?.session ?? null)
       setLoading(false)
     })
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    const { data: { subscription } = {} } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      setSession(session ?? null)
       setLoading(false)
     })
-    return () => { mounted = false; subscription.subscription.unsubscribe() }
-  },[])
+    return () => {
+      mounted = false
+      subscription?.unsubscribe()
+    }
+  }, [])
 
   if (loading) return <div>Loading...</div>
   if (!session) return <Navigate to="/login" replace />

@@ -10,13 +10,13 @@ import { supabase } from './lib/supabaseClient'
 export default function App() {
   const [user, setUser] = useState(null)
 
-  useEffect(()=>{
-    supabase.auth.getSession().then(({ data })=> setUser(data.session?.user ?? null))
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session)=>{
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setUser(data?.session?.user ?? null))
+    const { data: { subscription } = {} } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
-    return ()=> sub.subscription.unsubscribe()
-  },[])
+    return () => subscription?.unsubscribe()
+  }, [])
 
   return (
     <>

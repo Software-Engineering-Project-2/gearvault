@@ -6,17 +6,21 @@ export default function Dashboard(){
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(()=>{
+  useEffect(() => {
     let mounted = true
-    supabase.auth.getSession().then(({ data })=> setUser(data.session?.user ?? null))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session)=> setUser(session?.user ?? null))
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setUser(data?.session?.user ?? null)
+    })
+    const { data: { subscription } = {} } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (mounted) setUser(session?.user ?? null)
+    })
 
-    async function load(){
+    async function load() {
       setLoading(true)
       const { data, error } = await supabase
         .from('bookings')
         .select('id, start_ts, end_ts, status, deposit_amount, item_id')
-        .order('start_ts', {ascending:false})
+        .order('start_ts', { ascending: false })
       if (!mounted) return
       if (error) console.error(error)
       else setBookings(data || [])
@@ -24,8 +28,11 @@ export default function Dashboard(){
     }
     load()
 
-    return ()=> sub.subscription.unsubscribe()
-  },[])
+    return () => {
+      mounted = false
+      subscription?.unsubscribe()
+    }
+  }, [])
 
   return (
     <div>
@@ -63,7 +70,7 @@ export default function Dashboard(){
           <div className="card">
             <h4>Quick Actions</h4>
             <p className="small muted">Staff/Manager: use the backend to perform protected actions (audit, override).</p>
-            <button className="btn" style={{width:'100%'}}>Browse Catalog</button>
+            <button className="btn" style={{width:'100%'}} onClick={() => alert('Catalog feature is coming soon in Increment 2!')}>Browse Catalog</button>
           </div>
 
           <div className="card">
