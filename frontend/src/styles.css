@@ -22,14 +22,21 @@ body{font-family:Inter,system-ui,Segoe UI,Arial,Helvetica,sans-serif;background:
 .form-row{margin-bottom:12px}
 .form-row label{display:block;margin-bottom:6px;font-size:14px}
 .form-row input, .form-row textarea{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px}
+.form-row select, select{padding:8px;border:1px solid #ddd;border-radius:6px;background:#fff}
 .small{font-size:13px}
 .booking-item{display:flex;gap:12px;align-items:flex-start}
+.booking-row{padding:16px 0;border-bottom:1px solid #e5e5e5;gap:24px}.booking-row:last-child{border-bottom:0}
 .booking-item .meta{color:var(--muted);font-size:13px}
 .empty{padding:24px;text-align:center;color:var(--muted)}
 .inline-link{color:var(--accent);text-decoration:none}
 .topbar-actions{display:flex;gap:8px;align-items:center}
+.filters{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:16px}
+.filters input,.filters select{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px}.filters label{font-size:13px}.filters label input{display:block;margin-top:4px}
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.item-card{border:1px solid #e2e2e2;border-radius:7px;padding:14px;display:flex;flex-direction:column;gap:8px}.item-card h4,.item-card p{margin:0}.item-card .btn{margin-top:auto}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#eceef1;font-size:12px}.available{background:#d7f5df;color:#17652d}.unavailable{background:#fde1dc;color:#95250e}.booking-actions{display:flex;gap:6px;margin-top:8px}.secondary{background:#6b6f76}.notice{background:#fff4dc;border-left:3px solid #ffb000;padding:8px;margin:12px 0 0}
 @media (max-width: 768px) {
   .grid {
     grid-template-columns: 1fr;
   }
+  .filters{grid-template-columns:1fr}
 }

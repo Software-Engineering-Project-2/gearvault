@@ -1,10 +1,13 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { clearSession } from '../lib/api'
 import { supabase } from '../lib/supabaseClient'
 
-export default function NavBar({ user }){
+export default function NavBar({ user, onSignOut }){
   async function signOut(){
     await supabase.auth.signOut()
+    clearSession()
+    onSignOut()
     window.location.href = '/login'
   }
 
@@ -15,6 +18,8 @@ export default function NavBar({ user }){
         <div className="topbar-actions">
           {user ? (
             <>
+              <Link to="/dashboard" className="inline-link">Catalog</Link>
+              <Link to="/bookings" className="inline-link">My bookings</Link>
               <div className="muted" style={{marginRight:8}}>Signed in as: {user.email}</div>
               <button className="btn" onClick={signOut}>Sign out</button>
             </>

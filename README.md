@@ -1,24 +1,96 @@
-# GearVault — Equipment Rental Management (Increment 1)
+# GearVault
 
-This repository contains the GearVault project. Increment 1 delivers a Vite + React frontend with Supabase authentication and the database schema + Row-Level Security (RLS) configured in Supabase.
+GearVault is an equipment rental management app for browsing inventory, checking availability across a time window, and placing temporary booking holds before payment confirmation.
 
-Useful links
-- Frontend quickstart and run: [frontend/README.md](frontend/README.md)
-- Supabase schema, RLS and setup notes: [docs/supabase-setup.md](docs/supabase-setup.md)
+## Current project scope
 
-What is included now
-- Frontend scaffold (Vite + React) with pages: `Login`, `Signup`, `Dashboard` and a `NavBar`.
-- Supabase SQL schema and RLS policies in `frontend/sql/supabase_schema_with_rls.sql`.
-- Documentation in `docs/supabase-setup.md` with commands and examples for seeding and linking users.
+The repository now includes both the backend service and the React frontend for the rental workflow:
 
-Important notes and current limitations
-- The frontend uses `VITE_SUPABASE_ANON_KEY` (client anon key). Do NOT store the `service_role` key in frontend code or in the repository.
-- Signup creates an auth user but does not automatically create a `profiles` row assigning a role — this must be created via the admin UI or by a backend endpoint using the service role key. See `docs/supabase-setup.md` for guidance.
-- UI improvements: a Reddit-like theme and improved `Signup`/`Login`/`Dashboard` are included, but the frontend is minimal and intended as a starting point. Further UX work is planned.
+- Catalog browsing with category filters and keyword search
+- Availability checking for a selected date/time range
+- Booking holds with automatic expiry after 15 minutes
+- Booking confirmation after payment
+- Cancellation of active holds before checkout
+- Customer-specific booking history
+- Flask API with SQLite default database and optional external database support
+- Frontend pages for login, signup, catalog dashboard, and bookings
 
-Next recommended tasks
-1. Add a small backend (or Supabase Edge Function) to securely create users and `profiles` rows using the `service_role` key.
-2. Implement catalog pages and booking flows (frontend + server-side availability checks).
-3. Add tests and CI.
+## Project structure
 
-If you want, I can: add a secure `tools/create-users.js` script (requires `SUPABASE_SERVICE_ROLE_KEY`), push these changes to your GitHub, or continue improving the UI/UX.
+- [backend](backend) — Flask API and core rental logic
+- [frontend](frontend) — Vite + React app
+- [docs/supabase-setup.md](docs/supabase-setup.md) — Supabase auth and database setup notes
+- [frontend/sql/supabase_schema_with_rls.sql](frontend/sql/supabase_schema_with_rls.sql) — Supabase schema and RLS definitions
+
+## Backend features
+
+The Flask backend exposes catalog and booking endpoints under `/api`:
+
+- `GET /api/categories` — returns all active item categories
+- `GET /api/items` — lists catalog items, supports `search`, `category_id`, `start_ts`, and `end_ts`
+- `POST /api/bookings/hold` — creates a time-bound hold for an item, with overlap checks and expiry handling
+- `POST /api/bookings/<id>/confirm-payment` — confirms a held booking after payment
+- `DELETE /api/bookings/<id>` — cancels a held booking
+- `GET /api/bookings/mine` — returns bookings for the logged-in customer
+
+The backend also enforces booking rules:
+
+- overlapping bookings are blocked
+- active rental periods are treated as unavailable
+- holds expire automatically after 15 minutes if not confirmed
+- start/end windows must be valid and future-dated
+
+## Frontend features
+
+The React app includes:
+
+- `Login` and `Signup` pages
+- `Dashboard` page for catalog browsing and item availability by date range
+- `Bookings` page to view user bookings and confirm or cancel holds
+- client-side validation before creating a booking hold
+- booking status messaging and hold expiry details
+
+## Local setup
+
+### 1. Backend
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python run.py
+```
+
+The app defaults to a local SQLite database (`sqlite:///gearvault.db`).
+
+Optional environment variables:
+
+```bash
+export DATABASE_URL="postgresql://..."
+export USE_EXTERNAL_DATABASE="true"
+export JWT_SECRET_KEY="your-secret-key"
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_ANON_KEY="your-anon-key"
+```
+
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+cp env.example .env
+# update .env with your Supabase values
+npm run dev
+```
+
+## Security notes
+
+- Do not commit `.env` files or keys
+- Use the Supabase anonymous key only in the frontend
+- Keep the service role key and any admin secrets on the server side only
+
+## Useful references
+
+- [frontend/README.md](frontend/README.md)
+- [docs/supabase-setup.md](docs/supabase-setup.md)

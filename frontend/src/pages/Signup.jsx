@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { setSession } from '../lib/api'
 import { supabase } from '../lib/supabaseClient'
 
-export default function Signup() {
+export default function Signup({ onAuthenticated }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -17,7 +18,12 @@ export default function Signup() {
     try {
       const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
       if (error) throw error
-      // Note: you need to create a `profiles` row server-side or via admin action.
+      if (!data.session) {
+        setError('Check your email to confirm your account, then log in.')
+        return
+      }
+      setSession(data.session.access_token, data.user)
+      onAuthenticated(data.user)
       navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Signup error')
@@ -47,7 +53,6 @@ export default function Signup() {
         </div>
       </form>
       {error && <p style={{color:'red'}}>{error}</p>}
-      <p className="small muted" style={{marginTop:12}}>Note: Profiles are created via admin for now. Signup will create an auth user; link a profile row in the DB to assign role.</p>
     </div>
   )
 }
