@@ -1,4 +1,4 @@
-# GearVault Frontend
+x# GearVault Frontend
 
 This frontend provides the customer-facing experience for catalog browsing, booking holds, and booking management.
 

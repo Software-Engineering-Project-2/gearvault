@@ -96,12 +96,14 @@ class Booking(db.Model):
             if value and value.tzinfo is None:
                 value = value.replace(tzinfo=timezone.utc)
             return value.isoformat() if value else None
+
+        status_value = (self.status or "").strip()
         return {
             "id": self.id,
             "item": self.item.to_dict() if self.item else None,
             "start_ts": as_utc(self.start_ts),
             "end_ts": as_utc(self.end_ts),
-            "status": self.status,
+            "status": status_value.capitalize() if status_value else status_value,
             "hold_expires_at": as_utc(self.hold_expires_at),
             "deposit_amount": float(self.deposit_amount),
         }

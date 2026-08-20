@@ -7,18 +7,23 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from flask import Blueprint, g, jsonify, request
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from app.extensions import db
 from app.models import Booking, Category, Item, Rental
 
 catalog_bp = Blueprint("catalog", __name__, url_prefix="/api")
-BLOCKING_BOOKING_STATES = ("Held", "Confirmed")
-ACTIVE_RENTAL_STATES = ("Active", "CheckedOut")
+BLOCKING_BOOKING_STATES = ("held", "confirmed")
+ACTIVE_RENTAL_STATES = ("active", "checkedout")
+BOOKING_STATUS_HELD = "Held"
+BOOKING_STATUS_CONFIRMED = "Confirmed"
+BOOKING_STATUS_CANCELLED = "Cancelled"
+BOOKING_STATUS_EXPIRED = "Expired"
 
 
 def customer_required(view):
     """Validate a Supabase access token and expose auth.users UUID to routes."""
+
     @wraps(view)
     def wrapped(*args, **kwargs):
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
@@ -36,6 +41,7 @@ def customer_required(view):
         except (HTTPError, URLError, KeyError, ValueError):
             return jsonify({"error": "Your session is invalid or has expired"}), 401
         return view(*args, **kwargs)
+
     return wrapped
 
 
@@ -56,21 +62,22 @@ def parse_time(value):
 
 def expire_holds():
     Booking.query.filter(
-        Booking.status == "Held", Booking.hold_expires_at <= utcnow()
-    ).update({Booking.status: "Expired"}, synchronize_session=False)
+        func.lower(Booking.status) == BOOKING_STATUS_HELD.lower(),
+        Booking.hold_expires_at <= utcnow(),
+    ).update({Booking.status: BOOKING_STATUS_EXPIRED}, synchronize_session=False)
     db.session.commit()
 
 
 def has_overlap(item_id, start, end):
     booking = Booking.query.filter(
         Booking.item_id == item_id,
-        Booking.status.in_(BLOCKING_BOOKING_STATES),
+        func.lower(Booking.status).in_(BLOCKING_BOOKING_STATES),
         Booking.start_ts < end,
         Booking.end_ts > start,
     ).first()
     rental = Rental.query.filter(
         Rental.item_id == item_id,
-        Rental.status.in_(ACTIVE_RENTAL_STATES),
+        func.lower(Rental.status).in_(ACTIVE_RENTAL_STATES),
         Rental.checkout_at < end,
         Rental.due_at > start,
     ).first()
@@ -145,7 +152,11 @@ def create_hold():
             raise ValueError("Choose a future end time after the start time")
         # Lock the inventory row while checking and writing the hold.  On databases
         # supporting row locks this serializes competing holds for the same item.
-        item = Item.query.filter_by(id=data.get("item_id"), active=True).with_for_update().first()
+        item = (
+            Item.query.filter_by(id=data.get("item_id"), active=True)
+            .with_for_update()
+            .first()
+        )
         if not item:
             return jsonify({"error": "Item not found"}), 404
         if has_overlap(item.id, start, end):
@@ -157,7 +168,7 @@ def create_hold():
             item_id=item.id,
             start_ts=start,
             end_ts=end,
-            status="Held",
+            status=BOOKING_STATUS_HELD,
             hold_expires_at=utcnow() + timedelta(minutes=15),
             # Items have no deposit field in the supplied schema; use the
             # configured 20% replacement-value deposit until pricing is added.
@@ -174,14 +185,12 @@ def create_hold():
 @customer_required
 def confirm_payment(booking_id):
     expire_holds()
-    booking = Booking.query.filter_by(
-        id=booking_id, customer_id=g.customer_id
-    ).first()
+    booking = Booking.query.filter_by(id=booking_id, customer_id=g.customer_id).first()
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
-    if booking.status != "Held":
+    if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify({"error": "Only an active hold can be confirmed"}), 409
-    booking.status = "Confirmed"
+    booking.status = BOOKING_STATUS_CONFIRMED
     booking.hold_expires_at = None
     db.session.commit()
     return jsonify(
@@ -196,16 +205,14 @@ def confirm_payment(booking_id):
 @customer_required
 def cancel_hold(booking_id):
     expire_holds()
-    booking = Booking.query.filter_by(
-        id=booking_id, customer_id=g.customer_id
-    ).first()
+    booking = Booking.query.filter_by(id=booking_id, customer_id=g.customer_id).first()
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
-    if booking.status != "Held":
+    if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify(
             {"error": "Only a soft hold may be cancelled before checkout"}
         ), 409
-    booking.status = "Cancelled"
+    booking.status = BOOKING_STATUS_CANCELLED
     db.session.commit()
     return jsonify({"message": "Hold cancelled and availability released."})
 

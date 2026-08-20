@@ -59,16 +59,23 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env        # Windows (PowerShell): Copy-Item .env.example .env
+# update .env with your real PostgreSQL connection URL(s)
 python run.py
 ```
 
-The app defaults to a local SQLite database (`sqlite:///gearvault.db`).
+The backend .env.example already includes PostgreSQL placeholders:
+
+- DATABASE_POOLER_URL=postgresql://... (recommended)
+- DATABASE_URL=postgresql://... (direct DB fallback)
+
+The app uses PostgreSQL when DATABASE_POOLER_URL (recommended) or DATABASE_URL is set. If neither is set, it falls back to local SQLite (sqlite:///gearvault.db).
 
 Optional environment variables:
 
 ```bash
 export DATABASE_URL="postgresql://..."
-export USE_EXTERNAL_DATABASE="true"
+export DATABASE_POOLER_URL="postgresql://..."
 export JWT_SECRET_KEY="your-secret-key"
 export SUPABASE_URL="https://your-project.supabase.co"
 export SUPABASE_ANON_KEY="your-anon-key"
