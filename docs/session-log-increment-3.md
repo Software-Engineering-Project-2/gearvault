@@ -60,12 +60,35 @@ This document records all architectural updates, new features, database models, 
 
 ---
 
-### 5. SRS Compliance Audit (Progress Map)
+### 5. Dynamic Depreciation-Based Pricing Engine (FR011, FR012)
+- **Module**: [`backend/app/services/pricing_engine.py`](../backend/app/services/pricing_engine.py).
+- **Features**:
+  - Algorithmic straight-line depreciation calculated from purchase price and asset age down to a 20% salvage floor ratio.
+  - Duration-tier pricing multipliers: Daily (2.5%/day), Weekly (10%/week, 43% discount), and Monthly (30%/month, 60% discount).
+  - Dynamic refundable security deposit (20% of current depreciated value, min ₹500).
+  - Standalone unit test suite [`backend/tests/test_pricing.py`](../backend/tests/test_pricing.py) with 9 passing tests.
+  - Public estimate endpoint `POST /api/pricing/estimate`.
+
+---
+
+### 6. Digital Rental Agreement & Checklist (FR014)
+- **Component**: [`frontend/src/components/RentalAgreementModal.jsx`](../frontend/src/components/RentalAgreementModal.jsx).
+- **Features**:
+  - Generated at customer checkout review with mandatory consent agreement checkbox.
+  - Generated and previewed at staff equipment handover with pre-rental inspection notes & photo reference URLs.
+  - Accessible on demand by customers under `/bookings` and staff under `/staff`.
+  - Formal 5-section legal contract format including Parties, Condition Checklist, Timeline, Financial Breakdown, Binding SRS Business Rules (BR3, BR4, FR018, FR022, FR023), and Digital Signature stamps.
+  - Clean `@media print` layout enabling 1-click browser PDF export and paper printing.
+
+---
+
+### 7. SRS Compliance Audit (Progress Map)
 
 | Requirement Area | Status | Notes |
 | :--- | :---: | :--- |
 | **Increment 1: Auth & RBAC** | ✅ 100% | User registration, bcrypt hashing, JWT auth, role control. |
 | **Increment 2: Catalog & Booking** | ✅ 100% | Search, categories, availability window, 15-min soft holds, hold expiry worker. |
-| **Increment 3: Checkout & Staff** | 🟡 60% | Customer checkout flow, payment recording, staff pickup queue, and active rental monitoring complete. (Depreciation pricing engine & rental agreement up next). |
+| **Increment 3: Checkout & Pricing** | ✅ 100% | Checkout payment flow, dynamic pricing engine (FR011/FR012), staff handover, and digital rental agreement (FR014). |
 | **Increment 4: Returns & Damage** | ⏹️ 0% | Return check-in, photo comparison, and damage formulas up next. |
 | **Increment 5: Reports & Notifications** | ⏹️ 0% | In-app notification delivery and analytics dashboard. |
+

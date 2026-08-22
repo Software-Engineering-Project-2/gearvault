@@ -567,3 +567,262 @@ textarea:focus {
     padding: 0 14px;
   }
 }
+
+/* ==========================================
+   RENTAL AGREEMENT MODAL & DOCUMENT STYLES
+   ========================================== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modal-content.agreement-modal {
+  background: #ffffff;
+  width: 100%;
+  max-width: 780px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 24px;
+  position: relative;
+}
+
+.agreement-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.agreement-document {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 32px;
+  color: #1e293b;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.agreement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.brand-header h2 {
+  margin: 0;
+  color: #0f172a;
+  letter-spacing: 1.5px;
+  font-size: 24px;
+}
+
+.brand-header .doc-type {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+.doc-meta {
+  font-size: 12px;
+  text-align: right;
+  color: #64748b;
+}
+
+.divider {
+  border: 0;
+  border-top: 1px solid #cbd5e1;
+  margin: 16px 0;
+}
+
+.doc-section {
+  margin-bottom: 20px;
+}
+
+.doc-section h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 4px;
+}
+
+.grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.grid-2-col p {
+  margin: 3px 0;
+}
+
+.condition-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-top: 10px;
+}
+
+.condition-box p {
+  margin: 0;
+}
+
+.condition-text {
+  font-style: italic;
+  color: #334155;
+  margin-top: 2px !important;
+}
+
+.agreement-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.agreement-table th,
+.agreement-table td {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.agreement-table th {
+  background: #f1f5f9;
+  font-weight: 600;
+  color: #475569;
+}
+
+.agreement-table .highlight-row {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.terms-list {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.terms-list li {
+  margin-bottom: 8px;
+  color: #475569;
+}
+
+.terms-list li strong {
+  color: #0f172a;
+}
+
+.signatures-section {
+  margin-top: 24px;
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 16px;
+}
+
+.signature-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.signature-box p {
+  margin: 0 0 6px;
+}
+
+.sig-stamp {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px dashed #059669;
+  border-radius: 4px;
+  padding: 8px;
+  font-weight: 700;
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.sig-stamp.staff-stamp {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #16a34a;
+}
+
+/* Agreement Terms Checkbox & Accordion on Checkout */
+.checkout-terms-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0 12px;
+}
+
+.checkout-terms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.terms-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 10px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.terms-checkbox-label input {
+  margin-top: 3px;
+  cursor: pointer;
+}
+
+/* Print Styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .agreement-modal,
+  .agreement-modal * {
+    visibility: visible;
+  }
+  .agreement-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .agreement-document {
+    border: none;
+    padding: 0;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

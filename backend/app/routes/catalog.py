@@ -11,6 +11,11 @@ from sqlalchemy import func, or_
 
 from app.extensions import db
 from app.models import Booking, Category, Item, Rental, Payment, ItemConditionLog
+from app.services.pricing_engine import (
+    calculate_depreciated_value,
+    calculate_rental_pricing,
+    get_item_daily_rate,
+)
 
 catalog_bp = Blueprint("catalog", __name__, url_prefix="/api")
 BLOCKING_BOOKING_STATES = ("held", "confirmed")
@@ -137,6 +142,21 @@ def list_items():
     for item in query.order_by(Item.name):
         data = item.to_dict()
         data["available"] = availability(item, start, end) if start else True
+        if start and end:
+            cat_name = item.category.name if item.category else None
+            pricing = calculate_rental_pricing(
+                purchase_price=item.purchase_price,
+                purchase_date=item.purchase_date,
+                start_ts=start,
+                end_ts=end,
+                category_name=cat_name,
+                replacement_price=item.replacement_price,
+            )
+            data["pricing"] = pricing
+            data["estimated_price"] = pricing["rental_price"]
+            data["estimated_deposit"] = pricing["deposit_amount"]
+            data["duration_days"] = pricing["duration_days"]
+            data["duration_tier"] = pricing["duration_tier"]
         result.append(data)
     return jsonify({"items": result})
 
@@ -163,6 +183,17 @@ def create_hold():
             return jsonify(
                 {"error": "This item is no longer available for that window"}
             ), 409
+
+        cat_name = item.category.name if item.category else None
+        pricing = calculate_rental_pricing(
+            purchase_price=item.purchase_price,
+            purchase_date=item.purchase_date,
+            start_ts=start,
+            end_ts=end,
+            category_name=cat_name,
+            replacement_price=item.replacement_price,
+        )
+
         booking = Booking(
             customer_id=g.customer_id,
             item_id=item.id,
@@ -170,9 +201,7 @@ def create_hold():
             end_ts=end,
             status=BOOKING_STATUS_HELD,
             hold_expires_at=utcnow() + timedelta(minutes=15),
-            # Items have no deposit field in the supplied schema; use the
-            # configured 20% replacement-value deposit until pricing is added.
-            deposit_amount=item.replacement_price * Decimal("0.20"),
+            deposit_amount=Decimal(str(pricing["deposit_amount"])),
         )
         db.session.add(booking)
         db.session.commit()
@@ -303,6 +332,17 @@ def staff_process_handover(booking_id):
         db.session.add(condition_log)
         db.session.flush()
 
+    # Calculate final rental total price using pricing engine
+    cat_name = booking.item.category.name if booking.item and booking.item.category else None
+    pricing = calculate_rental_pricing(
+        purchase_price=booking.item.purchase_price if booking.item else 0,
+        purchase_date=booking.item.purchase_date if booking.item else None,
+        start_ts=booking.start_ts,
+        end_ts=booking.end_ts,
+        category_name=cat_name,
+        replacement_price=booking.item.replacement_price if booking.item else None,
+    )
+
     # Create active rental record
     rental = Rental(
         booking_id=booking.id,
@@ -311,6 +351,7 @@ def staff_process_handover(booking_id):
         checkout_at=utcnow(),
         due_at=booking.end_ts,
         status="active",
+        total_price=Decimal(str(pricing["rental_price"])),
         deposit_held=booking.deposit_amount,
     )
     db.session.add(rental)
@@ -327,5 +368,44 @@ def staff_process_handover(booking_id):
         "message": f"Handover complete. Rental for {booking.item.name if booking.item else 'item'} is now Active.",
         "rental": rental.to_dict()
     }), 200
+
+
+@catalog_bp.post("/pricing/estimate")
+def estimate_price():
+    """
+    Public / customer endpoint to calculate dynamic pricing for any item and date window.
+    """
+    data = request.get_json() or {}
+    item_id = data.get("item_id")
+    start_val = data.get("start_ts")
+    end_val = data.get("end_ts")
+    if not item_id or not start_val or not end_val:
+        return jsonify({"error": "item_id, start_ts, and end_ts are required"}), 400
+    
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+        
+    try:
+        start, end = parse_time(start_val), parse_time(end_val)
+        if start >= end:
+            raise ValueError("End date must be after start date")
+            
+        cat_name = item.category.name if item.category else None
+        pricing = calculate_rental_pricing(
+            purchase_price=item.purchase_price,
+            purchase_date=item.purchase_date,
+            start_ts=start,
+            end_ts=end,
+            category_name=cat_name,
+            replacement_price=item.replacement_price,
+        )
+        return jsonify({
+            "item_id": item.id,
+            "item_name": item.name,
+            "pricing": pricing,
+        })
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
 
 

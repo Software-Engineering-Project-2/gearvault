@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, getUser } from '../lib/api'
+import RentalAgreementModal from '../components/RentalAgreementModal'
 
 const formatTime = value => {
   if (!value) return ''
@@ -20,6 +21,8 @@ export default function Checkout() {
   const [paymentStatus, setPaymentStatus] = useState('ready') // 'ready' | 'processing' | 'success'
   const [paymentMethod, setPaymentMethod] = useState('card') // 'card' | 'upi'
   const [errorMessage, setErrorMessage] = useState('')
+  const [agreedToTerms, setAgreedToTerms] = useState(true)
+  const [showAgreementModal, setShowAgreementModal] = useState(false)
 
   // Mock form fields
   const [cardHolder, setCardHolder] = useState('Sathya Tester')
@@ -145,16 +148,47 @@ export default function Checkout() {
 
               <div className="price-breakdown">
                 <div className="price-row">
-                  <span>Replacement Value</span>
-                  <span>₹{booking?.item?.replacement_price || '0.00'}</span>
+                  <span>Original Purchase Price</span>
+                  <span>₹{booking?.item?.purchase_price?.toLocaleString('en-IN') || booking?.pricing?.purchase_price?.toLocaleString('en-IN') || '0'}</span>
                 </div>
                 <div className="price-row">
-                  <span>Security Deposit (20%)</span>
-                  <span>₹{deposit}</span>
+                  <span>
+                    Depreciated Value
+                    {booking?.pricing?.age_years !== undefined && (
+                      <span className="muted small" style={{ marginLeft: 6 }}>
+                        ({booking.pricing.age_years} yrs old)
+                      </span>
+                    )}
+                  </span>
+                  <strong style={{ color: '#1e293b' }}>
+                    ₹{(booking?.pricing?.depreciated_value || booking?.item?.depreciated_value || booking?.item?.purchase_price)?.toLocaleString('en-IN')}
+                  </strong>
                 </div>
-                <div className="price-row total">
-                  <strong>Total Payable Now</strong>
-                  <strong className="accent-amount">₹{deposit}</strong>
+                {booking?.pricing?.rental_price !== undefined && (
+                  <div className="price-row">
+                    <span>
+                      Rental Charges
+                      <span className="badge available" style={{ marginLeft: 6, fontSize: 11, padding: '2px 6px' }}>
+                        {booking?.pricing?.duration_days}d • {booking?.pricing?.duration_tier} Tier
+                      </span>
+                    </span>
+                    <strong style={{ color: 'var(--accent, #ff5722)' }}>
+                      ₹{booking.pricing.rental_price.toLocaleString('en-IN')}
+                    </strong>
+                  </div>
+                )}
+                <div className="price-row">
+                  <span>Refundable Security Deposit</span>
+                  <span>₹{deposit.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="price-row total" style={{ marginTop: 12, paddingTop: 12, borderTop: '2px solid #e2e8f0' }}>
+                  <div>
+                    <strong>Deposit Payable Now</strong>
+                    <p className="muted small" style={{ margin: '2px 0 0', fontWeight: 'normal' }}>
+                      (Rental charges settle at checkout handover)
+                    </p>
+                  </div>
+                  <strong className="accent-amount" style={{ fontSize: 20 }}>₹{deposit.toLocaleString('en-IN')}</strong>
                 </div>
               </div>
             </div>
@@ -273,6 +307,26 @@ export default function Checkout() {
                     </div>
                   )}
 
+                  <div className="checkout-terms-card">
+                    <div className="checkout-terms-header" onClick={() => setShowAgreementModal(true)}>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
+                        📄 Digital Rental Agreement & Policies
+                      </span>
+                      <span className="inline-link small">Review Full Agreement ↗</span>
+                    </div>
+                    <label className="terms-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={e => setAgreedToTerms(e.target.checked)}
+                        required
+                      />
+                      <span>
+                        I accept the <strong>GearVault Rental Agreement</strong>, Late Return Penalty rules (BR4), and Damage Liability policies (FR018).
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="payment-security-note">
                     <span className="lock-icon">🔒</span>
                     <span className="small muted">256-bit Simulated SSL Encryption</span>
@@ -282,9 +336,13 @@ export default function Checkout() {
                     type="submit"
                     className="btn"
                     style={{ width: '100%', padding: '12px', fontSize: 16, fontWeight: 600, marginTop: 8 }}
-                    disabled={!isHeld}
+                    disabled={!isHeld || !agreedToTerms}
                   >
-                    {isHeld ? `Pay ₹${deposit} & Confirm` : 'Booking Not in Held Status'}
+                    {!agreedToTerms
+                      ? 'Please Accept Terms to Continue'
+                      : isHeld
+                      ? `Pay ₹${deposit.toLocaleString('en-IN')} & Confirm Reservation`
+                      : 'Booking Not in Held Status'}
                   </button>
                 </form>
               </>
@@ -292,6 +350,22 @@ export default function Checkout() {
           </div>
         </div>
       </div>
+
+      {/* Digital Rental Agreement Modal (FR014) */}
+      <RentalAgreementModal
+        isOpen={showAgreementModal}
+        onClose={() => setShowAgreementModal(false)}
+        data={{
+          bookingId: booking?.id,
+          customer: getUser(),
+          item: booking?.item,
+          startTs: booking?.start_ts,
+          endTs: booking?.end_ts,
+          pricing: booking?.pricing,
+          depositAmount: deposit,
+          paymentProvider: paymentMethod === 'card' ? 'Credit/Debit Card (Simulated)' : 'UPI / QR (Simulated)',
+        }}
+      />
     </div>
   )
 }

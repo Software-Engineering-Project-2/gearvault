@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, getUser } from '../lib/api'
+import RentalAgreementModal from '../components/RentalAgreementModal'
 
 const time = value => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -8,6 +9,7 @@ export default function Bookings() {
   const [bookings, setBookings] = useState([])
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [selectedAgreementBooking, setSelectedAgreementBooking] = useState(null)
   const navigate = useNavigate()
 
   const load = async () => {
@@ -54,8 +56,13 @@ export default function Bookings() {
               <div className="meta">
                 {time(b.start_ts)} → {time(b.end_ts)}
               </div>
+              {b.rental_price !== undefined && b.rental_price !== null && (
+                <div className="small" style={{ color: '#475569', marginTop: 2 }}>
+                  Estimated Rental: <strong>₹{b.rental_price.toLocaleString('en-IN')}</strong> ({b.duration_days}d • {b.duration_tier} Tier) • Deposit: ₹{b.deposit_amount?.toLocaleString('en-IN')}
+                </div>
+              )}
               {b.status === 'Held' && (
-                <div className="meta" style={{ color: '#95250e', fontWeight: 500 }}>
+                <div className="meta" style={{ color: '#95250e', fontWeight: 500, marginTop: 2 }}>
                   Hold expires: {time(b.hold_expires_at)}
                 </div>
               )}
@@ -74,12 +81,39 @@ export default function Bookings() {
                   </button>
                 </div>
               )}
+              {b.status !== 'Held' && b.status !== 'Cancelled' && b.status !== 'Expired' && (
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    className="btn secondary"
+                    style={{ fontSize: 12, padding: '5px 10px' }}
+                    onClick={() => setSelectedAgreementBooking(b)}
+                  >
+                    📄 View Agreement
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))
       ) : (
         <div className="empty">You have no bookings yet.</div>
       )}
+
+      {/* Digital Rental Agreement Modal */}
+      <RentalAgreementModal
+        isOpen={Boolean(selectedAgreementBooking)}
+        onClose={() => setSelectedAgreementBooking(null)}
+        data={{
+          bookingId: selectedAgreementBooking?.id,
+          customer: getUser(),
+          item: selectedAgreementBooking?.item,
+          startTs: selectedAgreementBooking?.start_ts,
+          endTs: selectedAgreementBooking?.end_ts,
+          pricing: selectedAgreementBooking?.pricing,
+          depositAmount: selectedAgreementBooking?.deposit_amount,
+          paymentProvider: 'Simulated Gateway',
+        }}
+      />
     </div>
   )
 }

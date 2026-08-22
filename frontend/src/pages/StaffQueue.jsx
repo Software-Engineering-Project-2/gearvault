@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { api } from '../lib/api'
+import { api, getUser } from '../lib/api'
+import RentalAgreementModal from '../components/RentalAgreementModal'
 
 const formatTime = value => {
   if (!value) return '-'
@@ -24,6 +25,7 @@ export default function StaffQueue() {
   const [conditionNotes, setConditionNotes] = useState('Item inspected with customer. All accessories included.')
   const [photoUrl, setPhotoUrl] = useState('')
   const [processingHandover, setProcessingHandover] = useState(false)
+  const [selectedAgreementData, setSelectedAgreementData] = useState(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -166,7 +168,7 @@ export default function StaffQueue() {
                     Pickup: {formatTime(b.start_ts)} → Due: {formatTime(b.end_ts)}
                   </div>
                   <div className="small muted">
-                    Booking #{b.id} • Deposit Held: ₹{b.deposit_amount}
+                    Booking #{b.id} • {b.rental_price ? `Rental Charge: ₹${b.rental_price.toLocaleString('en-IN')} (${b.duration_days}d • ${b.duration_tier}) • ` : ''}Deposit Held: ₹{b.deposit_amount?.toLocaleString('en-IN')}
                   </div>
                 </div>
 
@@ -217,7 +219,7 @@ export default function StaffQueue() {
                       Checked Out: {formatTime(r.checkout_at)} → Due: {formatTime(r.due_at)}
                     </div>
                     <div className="small muted">
-                      Rental #{r.id} • Deposit Held: ₹{r.deposit_held || 0}
+                      Rental #{r.id} • {r.total_price ? `Rental Fee: ₹${r.total_price.toLocaleString('en-IN')} • ` : ''}Deposit Held: ₹{r.deposit_held?.toLocaleString('en-IN') || 0}
                     </div>
                   </div>
 
@@ -225,6 +227,31 @@ export default function StaffQueue() {
                     <span className="badge" style={{ background: '#e9ecef', color: '#495057' }}>
                       Rented
                     </span>
+                    <div style={{ marginTop: 6 }}>
+                      <button
+                        className="btn secondary"
+                        style={{ fontSize: 12, padding: '4px 8px' }}
+                        onClick={() => setSelectedAgreementData({
+                          rentalId: r.id,
+                          bookingId: r.booking_id,
+                          item: r.item,
+                          startTs: r.checkout_at,
+                          endTs: r.due_at,
+                          checkoutAt: r.checkout_at,
+                          pricing: {
+                            rental_price: r.total_price,
+                            depreciated_value: r.item?.depreciated_value,
+                            duration_tier: 'Daily/Weekly Tier',
+                            duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
+                          },
+                          depositAmount: r.deposit_held,
+                          conditionNotes: 'Verified at counter pickup inspection.',
+                          customer: { id: r.customer_id },
+                        })}
+                      >
+                        📄 Agreement
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -247,9 +274,15 @@ export default function StaffQueue() {
                 <span>Rental Duration:</span>
                 <strong>{formatTime(handoverBooking.start_ts)} → {formatTime(handoverBooking.end_ts)}</strong>
               </div>
+              {handoverBooking.rental_price && (
+                <div className="meta-row">
+                  <span>Rental Charge ({handoverBooking.duration_days}d • {handoverBooking.duration_tier} Tier):</span>
+                  <strong style={{ color: '#0f172a' }}>₹{handoverBooking.rental_price.toLocaleString('en-IN')}</strong>
+                </div>
+              )}
               <div className="meta-row">
                 <span>Deposit Confirmed:</span>
-                <strong style={{ color: 'var(--accent)' }}>₹{handoverBooking.deposit_amount}</strong>
+                <strong style={{ color: 'var(--accent)' }}>₹{handoverBooking.deposit_amount?.toLocaleString('en-IN')}</strong>
               </div>
             </div>
 
@@ -288,14 +321,33 @@ export default function StaffQueue() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
               <button
                 type="submit"
                 className="btn"
                 disabled={processingHandover}
                 style={{ flex: 1, padding: '10px 16px' }}
               >
-                {processingHandover ? 'Activating Rental...' : '✅ Complete Handover & Activate Rental'}
+                {processingHandover ? 'Activating Rental...' : '✅ Complete Handover & Activate'}
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setSelectedAgreementData({
+                  bookingId: handoverBooking.id,
+                  item: handoverBooking.item,
+                  startTs: handoverBooking.start_ts,
+                  endTs: handoverBooking.end_ts,
+                  checkoutAt: new Date().toISOString(),
+                  pricing: handoverBooking.pricing,
+                  depositAmount: handoverBooking.deposit_amount,
+                  conditionNotes: showConditionLog ? conditionNotes : 'Standard pre-handover physical verification.',
+                  photoUrl: showConditionLog ? photoUrl : null,
+                  customer: { id: handoverBooking.customer_id },
+                })}
+                disabled={processingHandover}
+              >
+                📄 Preview Agreement (FR014)
               </button>
               <button
                 type="button"
@@ -309,6 +361,13 @@ export default function StaffQueue() {
           </form>
         </div>
       )}
+
+      {/* Digital Rental Agreement Modal (FR014) */}
+      <RentalAgreementModal
+        isOpen={Boolean(selectedAgreementData)}
+        onClose={() => setSelectedAgreementData(null)}
+        data={selectedAgreementData}
+      />
     </div>
   )
 }

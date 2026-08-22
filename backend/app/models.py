@@ -59,6 +59,10 @@ class Item(db.Model):
     category = db.relationship("Category", back_populates="items")
 
     def to_dict(self):
+        from app.services.pricing_engine import calculate_depreciated_value, get_item_daily_rate
+        cat_name = self.category.name if self.category else None
+        dep_val = calculate_depreciated_value(self.purchase_price, self.purchase_date, category_name=cat_name)
+        daily_rate = get_item_daily_rate(self.purchase_price, self.purchase_date, category_name=cat_name)
         return {
             "id": self.id,
             "name": self.name,
@@ -66,7 +70,10 @@ class Item(db.Model):
             "sku": self.sku,
             "category": self.category.to_dict() if self.category else None,
             "purchase_price": float(self.purchase_price),
+            "purchase_date": self.purchase_date.isoformat() if self.purchase_date else None,
             "replacement_price": float(self.replacement_price),
+            "depreciated_value": dep_val,
+            "daily_rate": daily_rate,
             "active": self.active,
         }
 
@@ -98,6 +105,19 @@ class Booking(db.Model):
             return value.isoformat() if value else None
 
         status_value = (self.status or "").strip()
+        pricing_data = None
+        if self.item and self.start_ts and self.end_ts:
+            from app.services.pricing_engine import calculate_rental_pricing
+            cat_name = self.item.category.name if self.item.category else None
+            pricing_data = calculate_rental_pricing(
+                purchase_price=self.item.purchase_price,
+                purchase_date=self.item.purchase_date,
+                start_ts=self.start_ts,
+                end_ts=self.end_ts,
+                category_name=cat_name,
+                replacement_price=self.item.replacement_price,
+            )
+
         return {
             "id": self.id,
             "item": self.item.to_dict() if self.item else None,
@@ -106,6 +126,10 @@ class Booking(db.Model):
             "status": status_value.capitalize() if status_value else status_value,
             "hold_expires_at": as_utc(self.hold_expires_at),
             "deposit_amount": float(self.deposit_amount),
+            "pricing": pricing_data,
+            "rental_price": pricing_data["rental_price"] if pricing_data else None,
+            "duration_tier": pricing_data["duration_tier"] if pricing_data else None,
+            "duration_days": pricing_data["duration_days"] if pricing_data else None,
         }
 
 
