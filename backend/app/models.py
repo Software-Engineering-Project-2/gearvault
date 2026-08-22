@@ -126,3 +126,71 @@ class Rental(db.Model):
     created_at = db.Column(
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    item = db.relationship("Item")
+    booking = db.relationship("Booking")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "booking_id": self.booking_id,
+            "item_id": self.item_id,
+            "item": self.item.to_dict() if self.item else None,
+            "customer_id": self.customer_id,
+            "checkout_at": self.checkout_at.isoformat() if self.checkout_at else None,
+            "due_at": self.due_at.isoformat() if self.due_at else None,
+            "returned_at": self.returned_at.isoformat() if self.returned_at else None,
+            "status": self.status,
+            "total_price": float(self.total_price) if self.total_price else None,
+            "deposit_held": float(self.deposit_held) if self.deposit_held else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+
+class Payment(db.Model):
+    __tablename__ = "payments"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(36), nullable=False, index=True)
+    rental_id = db.Column(db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    payment_type = db.Column(db.String(50), nullable=False, default="deposit")
+    provider = db.Column(db.String(50), nullable=True, default="simulated")
+    created_at = db.Column(
+        db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "rental_id": self.rental_id,
+            "amount": float(self.amount),
+            "payment_type": self.payment_type,
+            "provider": self.provider,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ItemConditionLog(db.Model):
+    __tablename__ = "item_condition_log"
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=False, index=True)
+    rental_id = db.Column(db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True)
+    captured_by = db.Column(db.String(36), nullable=True)
+    photo_url = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    captured_at = db.Column(
+        db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "item_id": self.item_id,
+            "rental_id": self.rental_id,
+            "captured_by": self.captured_by,
+            "photo_url": self.photo_url,
+            "notes": self.notes,
+            "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+        }
+

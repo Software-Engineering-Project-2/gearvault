@@ -10,7 +10,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy import func, or_
 
 from app.extensions import db
-from app.models import Booking, Category, Item, Rental
+from app.models import Booking, Category, Item, Rental, Payment, ItemConditionLog
 
 catalog_bp = Blueprint("catalog", __name__, url_prefix="/api")
 BLOCKING_BOOKING_STATES = ("held", "confirmed")
@@ -190,15 +190,30 @@ def confirm_payment(booking_id):
         return jsonify({"error": "Booking not found"}), 404
     if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify({"error": "Only an active hold can be confirmed"}), 409
+    
+    data = request.get_json() or {}
+    provider = data.get("provider", "simulated_card")
+
+    # Record the deposit payment in the payments table
+    payment = Payment(
+        user_id=g.customer_id,
+        amount=booking.deposit_amount,
+        payment_type="deposit",
+        provider=provider,
+    )
+    db.session.add(payment)
+
     booking.status = BOOKING_STATUS_CONFIRMED
     booking.hold_expires_at = None
     db.session.commit()
     return jsonify(
         {
             "booking": booking.to_dict(),
+            "payment": payment.to_dict(),
             "message": "Deposit received; booking confirmed.",
         }
     )
+
 
 
 @catalog_bp.delete("/bookings/<int:booking_id>")
@@ -225,3 +240,92 @@ def my_bookings():
         Booking.created_at.desc()
     )
     return jsonify({"bookings": [booking.to_dict() for booking in bookings]})
+
+
+@catalog_bp.get("/bookings/<int:booking_id>")
+@customer_required
+def get_booking(booking_id):
+    expire_holds()
+    booking = Booking.query.filter_by(id=booking_id, customer_id=g.customer_id).first()
+    if not booking:
+        return jsonify({"error": "Booking not found"}), 404
+    return jsonify({"booking": booking.to_dict()})
+
+
+# ==========================================
+# STAFF & MANAGER OPERATIONS ENDPOINTS
+# ==========================================
+
+@catalog_bp.get("/staff/bookings/confirmed")
+@customer_required
+def staff_confirmed_bookings():
+    expire_holds()
+    # Returns all confirmed bookings ready for equipment pickup
+    bookings = Booking.query.filter(
+        func.lower(Booking.status) == BOOKING_STATUS_CONFIRMED.lower()
+    ).order_by(Booking.start_ts.asc()).all()
+    return jsonify({"bookings": [b.to_dict() for b in bookings]})
+
+
+@catalog_bp.get("/staff/rentals/active")
+@customer_required
+def staff_active_rentals():
+    # Returns all active rentals currently checked out to customers
+    rentals = Rental.query.filter(
+        func.lower(Rental.status) == "active"
+    ).order_by(Rental.due_at.asc()).all()
+    return jsonify({"rentals": [r.to_dict() for r in rentals]})
+
+
+@catalog_bp.post("/staff/bookings/<int:booking_id>/handover")
+@customer_required
+def staff_process_handover(booking_id):
+    expire_holds()
+    booking = Booking.query.filter_by(id=booking_id).first()
+    if not booking:
+        return jsonify({"error": "Booking not found"}), 404
+    if (booking.status or "").lower() != BOOKING_STATUS_CONFIRMED.lower():
+        return jsonify({"error": "Only confirmed bookings can be handed over"}), 400
+
+    data = request.get_json() or {}
+    condition_notes = data.get("notes", "").strip()
+    photo_url = data.get("photo_url", "").strip()
+
+    # Optional: Log pre-rental condition if notes or photo provided
+    condition_log = None
+    if condition_notes or photo_url:
+        condition_log = ItemConditionLog(
+            item_id=booking.item_id,
+            captured_by=g.customer_id,
+            notes=condition_notes or "Pre-rental condition check OK",
+            photo_url=photo_url or None,
+        )
+        db.session.add(condition_log)
+        db.session.flush()
+
+    # Create active rental record
+    rental = Rental(
+        booking_id=booking.id,
+        item_id=booking.item_id,
+        customer_id=booking.customer_id,
+        checkout_at=utcnow(),
+        due_at=booking.end_ts,
+        status="active",
+        deposit_held=booking.deposit_amount,
+    )
+    db.session.add(rental)
+
+    # Link condition log to rental if created
+    if condition_log:
+        condition_log.rental_id = rental.id
+
+    # Update booking status
+    booking.status = "Checked Out"
+    db.session.commit()
+
+    return jsonify({
+        "message": f"Handover complete. Rental for {booking.item.name if booking.item else 'item'} is now Active.",
+        "rental": rental.to_dict()
+    }), 200
+
+

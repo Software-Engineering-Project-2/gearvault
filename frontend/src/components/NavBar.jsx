@@ -20,6 +20,7 @@ export default function NavBar({ user, onSignOut }){
             <>
               <Link to="/dashboard" className="inline-link">Catalog</Link>
               <Link to="/bookings" className="inline-link">My bookings</Link>
+              <Link to="/staff" className="inline-link" style={{ fontWeight: 600, color: '#ffb000' }}>Staff Operations</Link>
               <div className="muted" style={{marginRight:8}}>Signed in as: {user.email}</div>
               <button className="btn" onClick={signOut}>Sign out</button>
             </>

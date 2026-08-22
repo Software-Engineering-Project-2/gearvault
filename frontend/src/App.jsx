@@ -4,6 +4,8 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Bookings from './pages/Bookings'
+import Checkout from './pages/Checkout'
+import StaffQueue from './pages/StaffQueue'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
 import { getUser } from './lib/api'
@@ -25,6 +27,8 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
+          <Route path="/checkout/:bookingId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute><StaffQueue /></ProtectedRoute>} />
         </Routes>
       </div>
     </>

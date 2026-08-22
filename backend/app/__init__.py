@@ -50,6 +50,13 @@ def create_app(test_config=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(catalog_bp)
 
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception as e:
+            app.logger.warning(f"db.create_all() notice: {e}")
+
+
     # Expire holds even when no customer is currently browsing the catalog.
     # Database checks in the booking endpoints remain the final race-safe guard.
     if not app.config.get("TESTING"):
