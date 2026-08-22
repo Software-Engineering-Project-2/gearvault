@@ -13,25 +13,31 @@ The repository now includes both the backend service and the React frontend for 
 - Cancellation of active holds before checkout
 - Customer-specific booking history
 - Flask API with SQLite default database and optional external database support
-- Frontend pages for login, signup, catalog dashboard, and bookings
+- Frontend pages for login, signup, catalog dashboard, bookings, checkout, and staff operations
 
 ## Project structure
 
 - [backend](backend) — Flask API and core rental logic
 - [frontend](frontend) — Vite + React app
+- [docs/session-log-increment-3.md](docs/session-log-increment-3.md) — Increment 3 checkout, staff, & theming documentation
 - [docs/supabase-setup.md](docs/supabase-setup.md) — Supabase auth and database setup notes
 - [frontend/sql/supabase_schema_with_rls.sql](frontend/sql/supabase_schema_with_rls.sql) — Supabase schema and RLS definitions
 
 ## Backend features
 
-The Flask backend exposes catalog and booking endpoints under `/api`:
+The Flask backend exposes catalog, booking, and staff endpoints under `/api`:
 
 - `GET /api/categories` — returns all active item categories
 - `GET /api/items` — lists catalog items, supports `search`, `category_id`, `start_ts`, and `end_ts`
 - `POST /api/bookings/hold` — creates a time-bound hold for an item, with overlap checks and expiry handling
-- `POST /api/bookings/<id>/confirm-payment` — confirms a held booking after payment
+- `GET /api/bookings/<id>` — retrieves individual booking details
+- `POST /api/bookings/<id>/confirm-payment` — confirms a held booking and records payment transaction
 - `DELETE /api/bookings/<id>` — cancels a held booking
 - `GET /api/bookings/mine` — returns bookings for the logged-in customer
+- `GET /api/staff/bookings/confirmed` — returns confirmed bookings ready for equipment pickup
+- `GET /api/staff/rentals/active` — returns all equipment currently out on rental
+- `POST /api/staff/bookings/<id>/handover` — processes checkout handover and activates rental (with optional condition logging)
+
 
 The backend also enforces booking rules:
 
