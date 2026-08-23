@@ -17,18 +17,6 @@ export default function NavBar({ user, onSignOut }) {
 
   const isActive = (path) => location.pathname === path
 
-  const isStaffOrManager = Boolean(
-    user && (
-      user.role === 'staff' ||
-      user.role === 'manager' ||
-      user.user_metadata?.role === 'staff' ||
-      user.user_metadata?.role === 'manager' ||
-      user.email?.toLowerCase().includes('staff') ||
-      user.email?.toLowerCase().includes('manager') ||
-      user.email?.toLowerCase().includes('admin')
-    )
-  )
-
   const handleLoggedOutNav = (e, type) => {
     e.preventDefault()
     if (type === 'reservations') {
@@ -39,7 +27,7 @@ export default function NavBar({ user, onSignOut }) {
     } else if (type === 'staff') {
       setPromptConfig({
         title: 'Staff Authorization Required',
-        message: 'Counter Dispatch operations require an authorized staff or store manager account.',
+        message: 'Please sign in to access Counter Dispatch and staff operations.',
       })
     }
   }
@@ -68,14 +56,12 @@ export default function NavBar({ user, onSignOut }) {
                 >
                   Reservations
                 </Link>
-                {isStaffOrManager && (
-                  <Link
-                    to="/staff"
-                    className="staff-pill-btn"
-                  >
-                    <span>⚙️</span> Counter Dispatch
-                  </Link>
-                )}
+                <Link
+                  to="/staff"
+                  className={`staff-pill-btn ${isActive('/staff') ? 'active' : ''}`}
+                >
+                  <span>⚙️</span> Counter Dispatch
+                </Link>
                 <div className="user-badge-pill">
                   <span className="user-status-dot" />
                   <span>{user.email}</span>

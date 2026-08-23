@@ -21,12 +21,12 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login onAuthenticated={setUser} />} />
           <Route path="/signup" element={<Signup onAuthenticated={setUser} />} />
-          {/* Public Catalog Browsing (FR005, FR006) */}
+          {/* Public Catalog Browsing */}
           <Route path="/dashboard" element={<Dashboard />} />
-          {/* Protected Customer & Staff Routes (FR003) */}
+          {/* Protected Routes */}
           <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
           <Route path="/checkout/:bookingId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-          <Route path="/staff" element={<ProtectedRoute requiredRole="staff"><StaffQueue /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute><StaffQueue /></ProtectedRoute>} />
         </Routes>
       </div>
     </>
