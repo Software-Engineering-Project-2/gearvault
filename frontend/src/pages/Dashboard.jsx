@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api, getUser } from '../lib/api'
+import SignInPromptModal from '../components/SignInPromptModal'
 
 const localInputValue = date => {
   const pad = value => String(value).padStart(2, '0')
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [end, setEnd] = useState(futureLocal(48))
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [selectedHoldItem, setSelectedHoldItem] = useState(null)
 
   // One hour buffer ensures a datetime-local value cannot already be in the past.
   const minimumStart = useMemo(() => futureLocal(1), [])
@@ -68,13 +70,20 @@ export default function Dashboard() {
 
   async function hold(item) {
     if (!isWindowValid) return
+
+    // If user is not signed in, show Sign In Prompt Modal
+    if (!user) {
+      setSelectedHoldItem(item)
+      return
+    }
+
     try {
       const d = await api('/bookings/hold', {
         method: 'POST',
         body: JSON.stringify({ item_id: item.id, start_ts: toIso(start), end_ts: toIso(end) })
       })
       setMessage(
-        `Hold placed for ${item.name}! Valid for 15 minutes. Deposit required: ₹${d.booking.deposit_amount}.`
+        `Reservation hold placed for ${item.name}. Active for 15 minutes. Deposit: ₹${d.booking.deposit_amount}.`
       )
       loadCatalog()
     } catch (e) {
@@ -86,31 +95,44 @@ export default function Dashboard() {
   return (
     <div>
       <div className="card">
-        <h3>Welcome{user ? `, ${user.full_name || user.email}` : ''}</h3>
-        <p className="muted">
-          Search equipment and select your rental window to calculate dynamic depreciation rates.
-        </p>
-        {message && <p className="notice">{message}</p>}
+        <div className="card-header" style={{ marginBottom: 4 }}>
+          <div>
+            <h2>Equipment Inventory</h2>
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              Precision production and cinema hardware. Select your project dates to check live availability and calculate rates.
+            </p>
+          </div>
+        </div>
+        {message && <div className="notice" style={{ marginTop: 14 }}>{message}</div>}
       </div>
 
       <div className="card">
-        <h3>Equipment Catalog</h3>
+        <div className="card-header">
+          <h3>Available Gear</h3>
+        </div>
+
         <div className="filters">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search equipment by name or SKU"
-          />
-          <select value={category} onChange={e => setCategory(e.target.value)}>
-            <option value="">All categories</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label>Search Equipment</label>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by model or SKU..."
+            />
+          </div>
+          <div>
+            <label>Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">All Categories</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <label>
-            From
+            Rental Start
             <input
               type="datetime-local"
               min={minimumStart}
@@ -119,7 +141,7 @@ export default function Dashboard() {
             />
           </label>
           <label>
-            To
+            Rental Return
             <input
               type="datetime-local"
               min={start || minimumStart}
@@ -130,13 +152,13 @@ export default function Dashboard() {
         </div>
 
         {!isWindowValid && (
-          <p className="notice">
-            Choose a future start time and an end time after it to see availability and dynamic rates.
-          </p>
+          <div className="notice">
+            Please specify a future start date and return date to view live equipment availability.
+          </div>
         )}
 
         {loading ? (
-          <div className="empty">Checking availability and calculating dynamic rates…</div>
+          <div className="empty">Loading equipment catalog…</div>
         ) : (
           <div className="catalog-grid">
             {items.length ? (
@@ -147,57 +169,65 @@ export default function Dashboard() {
                       <h4 style={{ margin: 0 }}>{item.name}</h4>
                       {item.sku && <span className="badge" style={{ fontSize: 11 }}>{item.sku}</span>}
                     </div>
-                    <p className="muted small" style={{ margin: '4px 0 8px' }}>
+                    <p className="muted small" style={{ margin: '4px 0 10px' }}>
                       {item.category?.name || 'General'} • Valuation: ₹{item.depreciated_value?.toLocaleString('en-IN') || item.purchase_price?.toLocaleString('en-IN')}
                     </p>
-                    <p style={{ margin: '4px 0 12px' }}>{item.description}</p>
+                    <p style={{ margin: '4px 0 14px', fontSize: 13.5 }}>{item.description}</p>
 
-                    {/* Dynamic Pricing Box */}
-                    <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="muted small">Daily Base Rate:</span>
-                        <strong style={{ color: '#0f172a' }}>₹{item.daily_rate?.toLocaleString('en-IN')}/day</strong>
+                    {/* Apple Dynamic Pricing Preview Box */}
+                    <div className="pricing-preview-box">
+                      <div className="pricing-preview-row">
+                        <span className="muted small">Daily Rate:</span>
+                        <strong style={{ color: 'var(--text-primary)' }}>₹{item.daily_rate?.toLocaleString('en-IN')}/day</strong>
                       </div>
                       
                       {item.estimated_price !== undefined && (
                         <>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                          <div className="pricing-preview-row" style={{ marginTop: 5 }}>
                             <span className="muted small">
-                              Rental ({item.duration_days}d • {item.duration_tier} Tier):
+                              Estimated Fee ({item.duration_days}d):
                             </span>
-                            <strong style={{ color: 'var(--accent, #ff5722)', fontSize: 15 }}>
+                            <strong style={{ color: 'var(--accent)', fontSize: 15 }}>
                               ₹{item.estimated_price?.toLocaleString('en-IN')}
                             </strong>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                            <span className="muted small">Refundable Deposit:</span>
-                            <span className="small">₹{item.estimated_deposit?.toLocaleString('en-IN')}</span>
+                          <div className="pricing-preview-row" style={{ marginTop: 4 }}>
+                            <span className="muted small">Security Deposit:</span>
+                            <span className="small" style={{ fontWeight: 500 }}>₹{item.estimated_deposit?.toLocaleString('en-IN')}</span>
                           </div>
                         </>
                       )}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
                     <span className={`badge ${item.available ? 'available' : 'unavailable'}`}>
-                      {item.available ? 'Available' : 'Unavailable'}
+                      {item.available ? '● Available' : '● In Use'}
                     </span>
                     <button
                       className="btn"
                       disabled={!item.available || !isWindowValid}
                       onClick={() => hold(item)}
                     >
-                      {item.available ? 'Place 15-min hold' : 'Not available'}
+                      {item.available ? 'Reserve Gear' : 'Unavailable'}
                     </button>
                   </div>
                 </article>
               ))
             ) : (
-              isWindowValid && <div className="empty">No catalog items match these filters.</div>
+              isWindowValid && <div className="empty">No equipment available matching your criteria.</div>
             )}
           </div>
         )}
       </div>
+
+      {/* Guest Sign-In Prompt Modal when reserving without authentication */}
+      <SignInPromptModal
+        isOpen={Boolean(selectedHoldItem)}
+        onClose={() => setSelectedHoldItem(null)}
+        title="Sign In to Reserve Equipment"
+        message={`Please sign in or create an account to place a 15-minute reservation hold on ${selectedHoldItem?.name || 'this item'}.`}
+      />
     </div>
   )
 }

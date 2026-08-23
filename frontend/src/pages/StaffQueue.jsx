@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { api, getUser } from '../lib/api'
+import { api } from '../lib/api'
 import RentalAgreementModal from '../components/RentalAgreementModal'
 
 const formatTime = value => {
-  if (!value) return '-'
+  if (!value) return '—'
   return new Date(value).toLocaleString(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short'
@@ -22,7 +22,7 @@ export default function StaffQueue() {
   // Handover modal state
   const [handoverBooking, setHandoverBooking] = useState(null)
   const [showConditionLog, setShowConditionLog] = useState(false)
-  const [conditionNotes, setConditionNotes] = useState('Item inspected with customer. All accessories included.')
+  const [conditionNotes, setConditionNotes] = useState('Item inspected with client. All standard accessories, caps, and battery included.')
   const [photoUrl, setPhotoUrl] = useState('')
   const [processingHandover, setProcessingHandover] = useState(false)
   const [selectedAgreementData, setSelectedAgreementData] = useState(null)
@@ -38,7 +38,7 @@ export default function StaffQueue() {
       setConfirmedBookings(bRes.bookings || [])
       setActiveRentals(rRes.rentals || [])
     } catch (err) {
-      setError(err.message || 'Failed to load staff operations data.')
+      setError(err.message || 'Failed to load counter operations queue.')
     } finally {
       setLoading(false)
     }
@@ -65,12 +65,12 @@ export default function StaffQueue() {
         body: JSON.stringify(payload)
       })
 
-      setMessage(res.message || 'Equipment successfully checked out to customer.')
+      setMessage(res.message || 'Equipment successfully dispatched and rental activated.')
       setHandoverBooking(null)
       setShowConditionLog(false)
       loadData()
     } catch (err) {
-      setError(err.message || 'Failed to process handover.')
+      setError(err.message || 'Failed to process equipment dispatch.')
     } finally {
       setProcessingHandover(false)
     }
@@ -100,75 +100,76 @@ export default function StaffQueue() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h2 style={{ margin: 0 }}>Staff Counter Operations</h2>
+            <h2>Counter Dispatch & Operations</h2>
             <p className="muted" style={{ margin: '4px 0 0' }}>
-              Manage equipment pickup handovers and monitor active customer rentals.
+              Manage counter collection handovers, verify equipment condition, and track active client rentals.
             </p>
           </div>
-          <button className="btn secondary" onClick={loadData} disabled={loading}>
+          <button className="btn secondary sm" onClick={loadData} disabled={loading}>
             🔄 Refresh
           </button>
         </div>
 
-        {message && <p className="notice" style={{ background: '#d7f5df', borderColor: '#17652d', color: '#17652d', marginTop: 12 }}>{message}</p>}
-        {error && <p className="notice" style={{ color: '#95250e', marginTop: 12 }}>{error}</p>}
+        {message && <div className="notice success" style={{ marginTop: 14 }}>{message}</div>}
+        {error && <div className="notice error" style={{ marginTop: 14 }}>{error}</div>}
       </div>
 
-      {/* Tabs */}
-      <div className="payment-tabs" style={{ margin: '16px 0 8px' }}>
+      {/* Apple Segmented Control */}
+      <div className="payment-tabs" style={{ margin: '0 0 16px', maxWidth: 440 }}>
         <button
           className={`tab-btn ${activeTab === 'confirmed' ? 'active' : ''}`}
           onClick={() => setActiveTab('confirmed')}
-          style={{ fontSize: 14, padding: '10px 16px' }}
         >
-          📦 Ready for Pickup ({confirmedBookings.length})
+          📦 Ready for Collection ({confirmedBookings.length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'active_rentals' ? 'active' : ''}`}
           onClick={() => setActiveTab('active_rentals')}
-          style={{ fontSize: 14, padding: '10px 16px' }}
         >
           🚚 Active Rentals ({activeRentals.length})
         </button>
       </div>
 
       {/* Search filter */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 18 }}>
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder={`Search ${activeTab === 'confirmed' ? 'pickup queue' : 'active rentals'} by item, SKU, or ID...`}
-          style={{ width: '100%', padding: '10px', borderRadius: 6, border: '1px solid #ddd' }}
+          placeholder={`Search ${activeTab === 'confirmed' ? 'collection queue' : 'active rentals'} by equipment, SKU, or order ID...`}
         />
       </div>
 
       {/* Confirmed Bookings Tab */}
       {activeTab === 'confirmed' && (
         <div className="card">
-          <h3>Confirmed Bookings Queue (Awaiting Customer Pickup)</h3>
-          <p className="muted small">
-            Deposit is confirmed. Hand over equipment and activate the rental when the customer arrives.
-          </p>
+          <div className="card-header">
+            <div>
+              <h3>Orders Awaiting Collection</h3>
+              <p className="muted small" style={{ margin: '2px 0 0' }}>
+                Deposit is secured. Verify physical condition with client and authorize dispatch.
+              </p>
+            </div>
+          </div>
 
           {loading ? (
-            <div className="empty">Loading queue...</div>
+            <div className="empty">Loading collection queue…</div>
           ) : filteredBookings.length === 0 ? (
-            <div className="empty">No confirmed bookings waiting for pickup.</div>
+            <div className="empty">No orders currently awaiting counter collection.</div>
           ) : (
             filteredBookings.map(b => (
-              <div key={b.id} className="booking-item booking-row">
+              <div key={b.id} className="booking-item">
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <strong>{b.item?.name}</strong>
-                    {b.item?.sku && <span className="badge">{b.item.sku}</span>}
-                    <span className="badge available">Deposit Paid</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: 16 }}>{b.item?.name}</strong>
+                    {b.item?.sku && <span className="badge" style={{ fontSize: 11 }}>{b.item.sku}</span>}
+                    <span className="badge available">● Deposit Confirmed</span>
                   </div>
                   <div className="meta" style={{ marginTop: 4 }}>
-                    Pickup: {formatTime(b.start_ts)} → Due: {formatTime(b.end_ts)}
+                    Collection: {formatTime(b.start_ts)} → Due: {formatTime(b.end_ts)}
                   </div>
-                  <div className="small muted">
-                    Booking #{b.id} • {b.rental_price ? `Rental Charge: ₹${b.rental_price.toLocaleString('en-IN')} (${b.duration_days}d • ${b.duration_tier}) • ` : ''}Deposit Held: ₹{b.deposit_amount?.toLocaleString('en-IN')}
+                  <div className="small muted" style={{ marginTop: 4 }}>
+                    Order #{b.id} • {b.rental_price ? `Rental: ₹${b.rental_price.toLocaleString('en-IN')} (${b.duration_days}d) • ` : ''}Deposit: ₹{b.deposit_amount?.toLocaleString('en-IN')}
                   </div>
                 </div>
 
@@ -181,7 +182,7 @@ export default function StaffQueue() {
                       setError('')
                     }}
                   >
-                    Handover Equipment
+                    Authorize Dispatch
                   </button>
                 </div>
               </div>
@@ -193,65 +194,63 @@ export default function StaffQueue() {
       {/* Active Rentals Tab */}
       {activeTab === 'active_rentals' && (
         <div className="card">
-          <h3>Active Equipment Rentals</h3>
-          <p className="muted small">
-            All equipment currently checked out by customers.
-          </p>
+          <div className="card-header">
+            <div>
+              <h3>Active Field Rentals</h3>
+              <p className="muted small" style={{ margin: '2px 0 0' }}>
+                All equipment currently in active client possession.
+              </p>
+            </div>
+          </div>
 
           {loading ? (
-            <div className="empty">Loading active rentals...</div>
+            <div className="empty">Loading active rentals…</div>
           ) : filteredRentals.length === 0 ? (
-            <div className="empty">No active equipment rentals at this time.</div>
+            <div className="empty">No equipment currently deployed in the field.</div>
           ) : (
             filteredRentals.map(r => {
               const isOverdue = new Date(r.due_at) < new Date()
               return (
-                <div key={r.id} className="booking-item booking-row">
+                <div key={r.id} className="booking-item">
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <strong>{r.item?.name || `Item #${r.item_id}`}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 16 }}>{r.item?.name || `Item #${r.item_id}`}</strong>
                       {r.item?.sku && <span className="badge">{r.item.sku}</span>}
                       <span className={`badge ${isOverdue ? 'unavailable' : 'available'}`}>
-                        {isOverdue ? '⚠️ Overdue' : 'Active'}
+                        {isOverdue ? '⚠️ Overdue' : '● Active'}
                       </span>
                     </div>
                     <div className="meta" style={{ marginTop: 4 }}>
-                      Checked Out: {formatTime(r.checkout_at)} → Due: {formatTime(r.due_at)}
+                      Dispatched: {formatTime(r.checkout_at)} → Due: {formatTime(r.due_at)}
                     </div>
-                    <div className="small muted">
-                      Rental #{r.id} • {r.total_price ? `Rental Fee: ₹${r.total_price.toLocaleString('en-IN')} • ` : ''}Deposit Held: ₹{r.deposit_held?.toLocaleString('en-IN') || 0}
+                    <div className="small muted" style={{ marginTop: 4 }}>
+                      Rental #{r.id} • {r.total_price ? `Fee: ₹${r.total_price.toLocaleString('en-IN')} • ` : ''}Deposit Held: ₹{r.deposit_held?.toLocaleString('en-IN') || 0}
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'right' }}>
-                    <span className="badge" style={{ background: '#e9ecef', color: '#495057' }}>
-                      Rented
-                    </span>
-                    <div style={{ marginTop: 6 }}>
-                      <button
-                        className="btn secondary"
-                        style={{ fontSize: 12, padding: '4px 8px' }}
-                        onClick={() => setSelectedAgreementData({
-                          rentalId: r.id,
-                          bookingId: r.booking_id,
-                          item: r.item,
-                          startTs: r.checkout_at,
-                          endTs: r.due_at,
-                          checkoutAt: r.checkout_at,
-                          pricing: {
-                            rental_price: r.total_price,
-                            depreciated_value: r.item?.depreciated_value,
-                            duration_tier: 'Daily/Weekly Tier',
-                            duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
-                          },
-                          depositAmount: r.deposit_held,
-                          conditionNotes: 'Verified at counter pickup inspection.',
-                          customer: { id: r.customer_id },
-                        })}
-                      >
-                        📄 Agreement
-                      </button>
-                    </div>
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <button
+                      className="btn secondary sm"
+                      onClick={() => setSelectedAgreementData({
+                        rentalId: r.id,
+                        bookingId: r.booking_id,
+                        item: r.item,
+                        startTs: r.checkout_at,
+                        endTs: r.due_at,
+                        checkoutAt: r.checkout_at,
+                        pricing: {
+                          rental_price: r.total_price,
+                          depreciated_value: r.item?.depreciated_value,
+                          duration_tier: 'Daily Tier',
+                          duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
+                        },
+                        depositAmount: r.deposit_held,
+                        conditionNotes: 'Verified during counter collection inspection.',
+                        customer: { id: r.customer_id },
+                      })}
+                    >
+                      📄 Agreement
+                    </button>
                   </div>
                 </div>
               )
@@ -262,73 +261,74 @@ export default function StaffQueue() {
 
       {/* Handover Modal / Panel */}
       {handoverBooking && (
-        <div className="card" style={{ border: '2px solid var(--accent)', marginTop: 16, background: '#fff9f6' }}>
-          <h3>Process Equipment Handover — Booking #{handoverBooking.id}</h3>
+        <div className="card" style={{ border: '1px solid var(--accent)', marginTop: 24, boxShadow: '0 8px 30px rgba(0, 113, 227, 0.12)' }}>
+          <h3>Equipment Dispatch — Order #{handoverBooking.id}</h3>
           <p className="small muted">
-            Item: <strong>{handoverBooking.item?.name}</strong> (SKU: {handoverBooking.item?.sku || 'N/A'})
+            Asset: <strong>{handoverBooking.item?.name}</strong> (SKU: {handoverBooking.item?.sku || 'N/A'})
           </p>
 
-          <form onSubmit={handleHandoverSubmit} style={{ marginTop: 12 }}>
-            <div className="meta-box" style={{ background: '#fff', border: '1px solid #ddd' }}>
+          <form onSubmit={handleHandoverSubmit} style={{ marginTop: 16 }}>
+            <div className="meta-box">
               <div className="meta-row">
-                <span>Rental Duration:</span>
+                <span className="muted">Rental Period:</span>
                 <strong>{formatTime(handoverBooking.start_ts)} → {formatTime(handoverBooking.end_ts)}</strong>
               </div>
               {handoverBooking.rental_price && (
                 <div className="meta-row">
-                  <span>Rental Charge ({handoverBooking.duration_days}d • {handoverBooking.duration_tier} Tier):</span>
-                  <strong style={{ color: '#0f172a' }}>₹{handoverBooking.rental_price.toLocaleString('en-IN')}</strong>
+                  <span className="muted">Rental Charge ({handoverBooking.duration_days}d):</span>
+                  <strong>₹{handoverBooking.rental_price.toLocaleString('en-IN')}</strong>
                 </div>
               )}
               <div className="meta-row">
-                <span>Deposit Confirmed:</span>
+                <span className="muted">Deposit Confirmed:</span>
                 <strong style={{ color: 'var(--accent)' }}>₹{handoverBooking.deposit_amount?.toLocaleString('en-IN')}</strong>
               </div>
             </div>
 
-            {/* Optional Pre-Rental Condition Logging Checkbox */}
-            <div style={{ margin: '14px 0' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
+            {/* Pre-Rental Condition Logging Checkbox */}
+            <div style={{ margin: '16px 0 12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
                 <input
                   type="checkbox"
                   checked={showConditionLog}
                   onChange={e => setShowConditionLog(e.target.checked)}
+                  style={{ width: 'auto' }}
                 />
-                Log Pre-Rental Condition Inspection (Optional)
+                Log Pre-Dispatch Condition Inspection Checklist (Optional)
               </label>
             </div>
 
             {showConditionLog && (
-              <div style={{ background: '#fff', padding: 14, border: '1px solid #ddd', borderRadius: 6, marginBottom: 14 }}>
+              <div className="meta-box" style={{ marginBottom: 16 }}>
                 <div className="form-row">
                   <label>Inspection Notes</label>
                   <textarea
                     rows={2}
                     value={conditionNotes}
                     onChange={e => setConditionNotes(e.target.value)}
-                    placeholder="Enter pre-rental equipment condition notes..."
+                    placeholder="Enter pre-dispatch hardware inspection notes..."
                   />
                 </div>
-                <div className="form-row">
-                  <label>Pre-Rental Photo Reference (URL or Mock Attachment)</label>
+                <div className="form-row" style={{ marginBottom: 0 }}>
+                  <label>Inspection Photo Reference URL</label>
                   <input
                     type="text"
                     value={photoUrl}
                     onChange={e => setPhotoUrl(e.target.value)}
-                    placeholder="https://example.com/photos/item-condition-front.jpg"
+                    placeholder="https://example.com/photos/item-condition.jpg"
                   />
                 </div>
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
               <button
                 type="submit"
                 className="btn"
                 disabled={processingHandover}
-                style={{ flex: 1, padding: '10px 16px' }}
+                style={{ flex: 1 }}
               >
-                {processingHandover ? 'Activating Rental...' : '✅ Complete Handover & Activate'}
+                {processingHandover ? 'Dispatching Gear…' : 'Authorize Handover & Dispatch'}
               </button>
               <button
                 type="button"
@@ -341,13 +341,13 @@ export default function StaffQueue() {
                   checkoutAt: new Date().toISOString(),
                   pricing: handoverBooking.pricing,
                   depositAmount: handoverBooking.deposit_amount,
-                  conditionNotes: showConditionLog ? conditionNotes : 'Standard pre-handover physical verification.',
+                  conditionNotes: showConditionLog ? conditionNotes : 'Standard pre-dispatch hardware verification.',
                   photoUrl: showConditionLog ? photoUrl : null,
                   customer: { id: handoverBooking.customer_id },
                 })}
                 disabled={processingHandover}
               >
-                📄 Preview Agreement (FR014)
+                📄 Preview Agreement
               </button>
               <button
                 type="button"

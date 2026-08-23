@@ -36,7 +36,7 @@ export default function Checkout() {
       setLoading(true)
       api(`/bookings/${bookingId}`)
         .then(data => setBooking(data.booking))
-        .catch(err => setErrorMessage(err.message || 'Failed to load booking.'))
+        .catch(err => setErrorMessage(err.message || 'Failed to load booking details.'))
         .finally(() => setLoading(false))
     }
   }, [bookingId, booking])
@@ -47,10 +47,8 @@ export default function Checkout() {
     setPaymentStatus('processing')
 
     try {
-      // Show simulated processing animation for ~1.2s before backend confirmation
       await new Promise(resolve => setTimeout(resolve, 1200))
       
-      // Confirm payment in backend & record in payments table
       await api(`/bookings/${bookingId}/confirm-payment`, {
         method: 'POST',
         body: JSON.stringify({
@@ -58,34 +56,32 @@ export default function Checkout() {
         })
       })
       
-      // Show payment successful animation
       setPaymentStatus('success')
 
-      // Automatically navigate back to bookings after 1.8s
       setTimeout(() => {
         navigate('/bookings')
       }, 1800)
     } catch (err) {
       setPaymentStatus('ready')
-      setErrorMessage(err.message || 'Payment confirmation failed. Please try again.')
+      setErrorMessage(err.message || 'Payment authorization failed. Please try again.')
     }
   }
 
   if (loading) {
     return (
-      <div className="card" style={{ maxWidth: 600, margin: '24px auto', textAlign: 'center' }}>
-        <div className="empty">Loading checkout details...</div>
+      <div className="card" style={{ maxWidth: 560, margin: '32px auto', textAlign: 'center' }}>
+        <div className="empty">Initializing secure checkout session…</div>
       </div>
     )
   }
 
   if (!booking && errorMessage) {
     return (
-      <div className="card" style={{ maxWidth: 600, margin: '24px auto' }}>
-        <h2>Checkout Error</h2>
-        <p className="notice" style={{ color: '#95250e' }}>{errorMessage}</p>
-        <Link to="/bookings" className="btn" style={{ display: 'inline-block', marginTop: 12 }}>
-          Return to Bookings
+      <div className="card" style={{ maxWidth: 560, margin: '32px auto' }}>
+        <h2>Order Error</h2>
+        <p className="notice error">{errorMessage}</p>
+        <Link to="/bookings" className="btn" style={{ display: 'inline-block', marginTop: 16 }}>
+          Return to Reservations
         </Link>
       </div>
     )
@@ -97,18 +93,18 @@ export default function Checkout() {
   return (
     <div className="checkout-page">
       <div className="checkout-header">
-        <Link to="/bookings" className="inline-link small">← Back to My Bookings</Link>
-        <h2>Secure Checkout</h2>
-        <p className="muted">Review your reservation details and complete deposit payment.</p>
+        <Link to="/bookings" className="inline-link small">← Back to Reservations</Link>
+        <h2>Order Confirmation</h2>
+        <p className="muted" style={{ margin: '4px 0 0' }}>Review rental schedule and authorize refundable security deposit.</p>
       </div>
 
-      {errorMessage && <p className="notice" style={{ color: '#95250e', marginBottom: 16 }}>{errorMessage}</p>}
+      {errorMessage && <div className="notice error" style={{ marginBottom: 20 }}>{errorMessage}</div>}
 
       <div className="grid checkout-grid">
         {/* Left Column: Booking Summary */}
         <div className="left">
           <div className="card">
-            <h3>Booking Summary</h3>
+            <h3>Reservation Details</h3>
             <div className="checkout-item-details">
               <div className="checkout-item-header">
                 <h4>{booking?.item?.name || 'Equipment Item'}</h4>
@@ -120,7 +116,7 @@ export default function Checkout() {
                 </p>
               )}
               {booking?.item?.description && (
-                <p className="small" style={{ margin: '4px 0 12px' }}>
+                <p className="small" style={{ margin: '4px 0 14px', color: 'var(--text-secondary)' }}>
                   {booking.item.description}
                 </p>
               )}
@@ -131,36 +127,36 @@ export default function Checkout() {
                   <strong>{formatTime(booking?.start_ts)}</strong>
                 </div>
                 <div className="meta-row">
-                  <span className="muted">Rental End:</span>
+                  <span className="muted">Rental Return:</span>
                   <strong>{formatTime(booking?.end_ts)}</strong>
                 </div>
                 {booking?.hold_expires_at && isHeld && (
                   <div className="meta-row hold-expiry-row">
-                    <span className="muted">Hold Expires:</span>
-                    <span className="badge unavailable">{formatTime(booking.hold_expires_at)}</span>
+                    <span className="muted">Hold Active Until:</span>
+                    <span className="badge held">{formatTime(booking.hold_expires_at)}</span>
                   </div>
                 )}
                 <div className="meta-row">
-                  <span className="muted">Booking Status:</span>
+                  <span className="muted">Reservation Status:</span>
                   <span className="badge available">{booking?.status}</span>
                 </div>
               </div>
 
               <div className="price-breakdown">
                 <div className="price-row">
-                  <span>Original Purchase Price</span>
+                  <span>Replacement Value</span>
                   <span>₹{booking?.item?.purchase_price?.toLocaleString('en-IN') || booking?.pricing?.purchase_price?.toLocaleString('en-IN') || '0'}</span>
                 </div>
                 <div className="price-row">
                   <span>
-                    Depreciated Value
+                    Asset Valuation
                     {booking?.pricing?.age_years !== undefined && (
                       <span className="muted small" style={{ marginLeft: 6 }}>
-                        ({booking.pricing.age_years} yrs old)
+                        ({booking.pricing.age_years} yr old)
                       </span>
                     )}
                   </span>
-                  <strong style={{ color: '#1e293b' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>
                     ₹{(booking?.pricing?.depreciated_value || booking?.item?.depreciated_value || booking?.item?.purchase_price)?.toLocaleString('en-IN')}
                   </strong>
                 </div>
@@ -168,11 +164,11 @@ export default function Checkout() {
                   <div className="price-row">
                     <span>
                       Rental Charges
-                      <span className="badge available" style={{ marginLeft: 6, fontSize: 11, padding: '2px 6px' }}>
-                        {booking?.pricing?.duration_days}d • {booking?.pricing?.duration_tier} Tier
+                      <span className="badge available" style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px' }}>
+                        {booking?.pricing?.duration_days} Day(s)
                       </span>
                     </span>
-                    <strong style={{ color: 'var(--accent, #ff5722)' }}>
+                    <strong style={{ color: 'var(--accent)' }}>
                       ₹{booking.pricing.rental_price.toLocaleString('en-IN')}
                     </strong>
                   </div>
@@ -181,14 +177,14 @@ export default function Checkout() {
                   <span>Refundable Security Deposit</span>
                   <span>₹{deposit.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="price-row total" style={{ marginTop: 12, paddingTop: 12, borderTop: '2px solid #e2e8f0' }}>
+                <div className="price-row total">
                   <div>
-                    <strong>Deposit Payable Now</strong>
+                    <strong>Deposit Due Now</strong>
                     <p className="muted small" style={{ margin: '2px 0 0', fontWeight: 'normal' }}>
-                      (Rental charges settle at checkout handover)
+                      (Rental charges settle at equipment collection)
                     </p>
                   </div>
-                  <strong className="accent-amount" style={{ fontSize: 20 }}>₹{deposit.toLocaleString('en-IN')}</strong>
+                  <strong className="accent-amount">₹{deposit.toLocaleString('en-IN')}</strong>
                 </div>
               </div>
             </div>
@@ -201,8 +197,8 @@ export default function Checkout() {
             {paymentStatus === 'processing' && (
               <div className="payment-animation-box">
                 <div className="spinner"></div>
-                <h3>Processing Payment...</h3>
-                <p className="muted small">Authorizing deposit of ₹{deposit} with GearVault Secure Pay</p>
+                <h3 style={{ margin: '0 0 6px' }}>Authorizing Escrow…</h3>
+                <p className="muted small">Processing security deposit of ₹{deposit.toLocaleString('en-IN')} via secure gateway</p>
               </div>
             )}
 
@@ -212,21 +208,19 @@ export default function Checkout() {
                   <div className="check-icon">
                     <span className="icon-line line-tip"></span>
                     <span className="icon-line line-long"></span>
-                    <div className="icon-circle"></div>
-                    <div className="icon-fix"></div>
                   </div>
                 </div>
-                <h3 style={{ color: '#17652d', marginTop: 16 }}>Payment Successful!</h3>
-                <p className="muted small">Your booking has been confirmed. Redirecting to your bookings...</p>
+                <h3 style={{ color: '#1b7a37', marginTop: 12, marginBottom: 4 }}>Deposit Confirmed</h3>
+                <p className="muted small">Your reservation is confirmed. Redirecting to your reservations…</p>
               </div>
             )}
 
             {paymentStatus === 'ready' && (
               <>
-                <h3>Payment Method</h3>
-                <p className="muted small">Select your preferred mock payment option:</p>
+                <h3 style={{ marginBottom: 4 }}>Payment Method</h3>
+                <p className="muted small">Select an authorization method for deposit hold:</p>
 
-                {/* Tabs */}
+                {/* Segmented Tabs */}
                 <div className="payment-tabs">
                   <button
                     type="button"
@@ -267,7 +261,7 @@ export default function Checkout() {
                           required
                         />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div className="form-row">
                           <label>Expiry</label>
                           <input
@@ -298,21 +292,21 @@ export default function Checkout() {
                         type="text"
                         value={upiId}
                         onChange={e => setUpiId(e.target.value)}
-                        placeholder="yourname@okhdfcbank"
+                        placeholder="yourname@bank"
                         required
                       />
                       <p className="small muted" style={{ marginTop: 4 }}>
-                        A simulated payment request will be sent to this ID.
+                        A payment authorization prompt will be issued to this VPA.
                       </p>
                     </div>
                   )}
 
                   <div className="checkout-terms-card">
                     <div className="checkout-terms-header" onClick={() => setShowAgreementModal(true)}>
-                      <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                        📄 Digital Rental Agreement & Policies
+                      <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+                        📄 Master Rental Agreement & Policies
                       </span>
-                      <span className="inline-link small">Review Full Agreement ↗</span>
+                      <span className="inline-link small">View Agreement ↗</span>
                     </div>
                     <label className="terms-checkbox-label">
                       <input
@@ -322,27 +316,27 @@ export default function Checkout() {
                         required
                       />
                       <span>
-                        I accept the <strong>GearVault Rental Agreement</strong>, Late Return Penalty rules (BR4), and Damage Liability policies (FR018).
+                        I acknowledge and accept the <strong>GearVault Rental Terms</strong>, Late Return Policies, and Equipment Liability Agreement.
                       </span>
                     </label>
                   </div>
 
                   <div className="payment-security-note">
-                    <span className="lock-icon">🔒</span>
-                    <span className="small muted">256-bit Simulated SSL Encryption</span>
+                    <span style={{ fontSize: 13 }}>🔒</span>
+                    <span className="small muted">256-bit Encrypted Transaction</span>
                   </div>
 
                   <button
                     type="submit"
                     className="btn"
-                    style={{ width: '100%', padding: '12px', fontSize: 16, fontWeight: 600, marginTop: 8 }}
+                    style={{ width: '100%', padding: '12px 20px', fontSize: 15, fontWeight: 600, marginTop: 10 }}
                     disabled={!isHeld || !agreedToTerms}
                   >
                     {!agreedToTerms
-                      ? 'Please Accept Terms to Continue'
+                      ? 'Accept Terms to Continue'
                       : isHeld
-                      ? `Pay ₹${deposit.toLocaleString('en-IN')} & Confirm Reservation`
-                      : 'Booking Not in Held Status'}
+                      ? `Authorize ₹${deposit.toLocaleString('en-IN')} Deposit`
+                      : 'Reservation Not Held'}
                   </button>
                 </form>
               </>

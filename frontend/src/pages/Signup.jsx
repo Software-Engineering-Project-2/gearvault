@@ -16,7 +16,11 @@ export default function Signup({ onAuthenticated }) {
     setError(null)
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } }
+      })
       if (error) throw error
       if (!data.session) {
         setError('Check your email to confirm your account, then log in.')
@@ -27,32 +31,71 @@ export default function Signup({ onAuthenticated }) {
       navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Signup error')
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="card" style={{maxWidth:540,margin:'24px auto'}}>
-      <h2 style={{marginTop:0}}>Create an account</h2>
-      <p className="muted">Sign up to start booking equipment</p>
-      <form onSubmit={handleSubmit} style={{marginTop:12}}>
+    <div className="card" style={{ maxWidth: 460, margin: '40px auto', padding: '36px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div className="logo-icon" style={{ width: 44, height: 44, borderRadius: 12, fontSize: 18, margin: '0 auto 14px' }}>
+          GV
+        </div>
+        <h2 style={{ fontSize: 24, margin: '0 0 6px' }}>Create Your GearVault Account</h2>
+        <p className="muted" style={{ margin: 0 }}>Start renting professional equipment in minutes</p>
+      </div>
+
+      {error && <div className="notice error" style={{ marginBottom: 20 }}>{error}</div>}
+
+      <form onSubmit={handleSubmit}>
         <div className="form-row">
-          <label>Full name</label>
-          <input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Your name" />
+          <label>Full Name</label>
+          <input
+            type="text"
+            value={fullName}
+            onChange={e => setFullName(e.target.value)}
+            placeholder="John Appleseed"
+            required
+          />
         </div>
         <div className="form-row">
-          <label>Email</label>
-          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" />
+          <label>Email Address</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            required
+          />
         </div>
         <div className="form-row">
           <label>Password</label>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Choose a secure password" />
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Choose a strong password"
+            required
+          />
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <button className="btn" type="submit" disabled={loading}>{loading ? 'Creating...' : 'Create account'}</button>
-          <Link to="/login" className="inline-link small">Have an account?</Link>
+
+        <button
+          className="btn"
+          type="submit"
+          disabled={loading}
+          style={{ width: '100%', padding: '12px', fontSize: 15, fontWeight: 600, marginTop: 8 }}
+        >
+          {loading ? 'Creating Account…' : 'Create Account'}
+        </button>
+
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13.5 }} className="muted">
+          Already have an account?{' '}
+          <Link to="/login" className="inline-link">
+            Sign in
+          </Link>
         </div>
       </form>
-      {error && <p style={{color:'red'}}>{error}</p>}
     </div>
   )
 }

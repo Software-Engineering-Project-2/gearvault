@@ -22,28 +22,61 @@ export default function Login({ onAuthenticated }) {
       navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Login error')
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="card" style={{maxWidth:480,margin:'24px auto'}}>
-      <h2 style={{marginTop:0}}>Welcome back</h2>
-      <p className="muted">Sign in to your GearVault account</p>
-      <form onSubmit={handleSubmit} style={{marginTop:12}}>
+    <div className="card" style={{ maxWidth: 440, margin: '40px auto', padding: '36px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div className="logo-icon" style={{ width: 44, height: 44, borderRadius: 12, fontSize: 18, margin: '0 auto 14px' }}>
+          GV
+        </div>
+        <h2 style={{ fontSize: 24, margin: '0 0 6px' }}>Sign In to GearVault</h2>
+        <p className="muted" style={{ margin: 0 }}>Access your equipment rental account</p>
+      </div>
+
+      {error && <div className="notice error" style={{ marginBottom: 20 }}>{error}</div>}
+
+      <form onSubmit={handleSubmit}>
         <div className="form-row">
-          <label>Email</label>
-          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" />
+          <label>Email Address</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            required
+          />
         </div>
         <div className="form-row">
           <label>Password</label>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" />
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <button className="btn" type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
-          <Link to="/signup" className="inline-link small">Create account</Link>
+
+        <button
+          className="btn"
+          type="submit"
+          disabled={loading}
+          style={{ width: '100%', padding: '12px', fontSize: 15, fontWeight: 600, marginTop: 8 }}
+        >
+          {loading ? 'Signing In…' : 'Sign In'}
+        </button>
+
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13.5 }} className="muted">
+          Don't have an account?{' '}
+          <Link to="/signup" className="inline-link">
+            Create account
+          </Link>
         </div>
       </form>
-      {error && <p style={{color:'red'}}>{error}</p>}
     </div>
   )
 }

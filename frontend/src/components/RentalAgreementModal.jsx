@@ -1,7 +1,7 @@
 import React from 'react'
 
 const formatTime = value => {
-  if (!value) return '-'
+  if (!value) return '—'
   return new Date(value).toLocaleString(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short'
@@ -23,11 +23,10 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
     depositAmount,
     conditionNotes,
     photoUrl,
-    paymentStatus,
     paymentProvider,
   } = data
 
-  const agreementRef = `GV-AGR-${bookingId || '000'}-${(rentalId || '000')}`
+  const agreementRef = `GV-AGR-${bookingId || '000'}-${rentalId || '000'}`
   const todayStr = new Date().toLocaleDateString(undefined, { dateStyle: 'long' })
 
   const handlePrint = () => {
@@ -39,10 +38,10 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
       <div className="modal-content agreement-modal" onClick={e => e.stopPropagation()}>
         {/* Action Header */}
         <div className="agreement-actions no-print">
-          <button className="btn secondary" onClick={handlePrint}>
+          <button className="btn secondary sm" onClick={handlePrint}>
             🖨️ Print / Save PDF
           </button>
-          <button className="btn secondary" onClick={onClose} style={{ marginLeft: 8 }}>
+          <button className="btn secondary sm" onClick={onClose} style={{ marginLeft: 8 }}>
             ✕ Close
           </button>
         </div>
@@ -53,7 +52,7 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
           <div className="agreement-header">
             <div className="brand-header">
               <h2>GEARVAULT</h2>
-              <span className="doc-type">EQUIPMENT RENTAL AGREEMENT & CHECKLIST</span>
+              <span className="doc-type">MASTER EQUIPMENT RENTAL AGREEMENT</span>
             </div>
             <div className="doc-meta">
               <div><strong>Agreement Ref:</strong> {agreementRef}</div>
@@ -69,13 +68,13 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
             <h4>1. PARTIES & RESERVATION DETAILS</h4>
             <div className="grid-2-col">
               <div>
-                <p><strong>Renter (Customer):</strong> {customer?.full_name || customer?.email || 'Registered Customer'}</p>
-                <p><strong>Customer ID:</strong> {customer?.id || 'N/A'}</p>
-                <p><strong>Contact Email:</strong> {customer?.email || 'N/A'}</p>
+                <p><strong>Client (Renter):</strong> {customer?.full_name || customer?.email || 'Registered Customer'}</p>
+                <p><strong>Account ID:</strong> {customer?.id || 'N/A'}</p>
+                <p><strong>Email Address:</strong> {customer?.email || 'N/A'}</p>
               </div>
               <div>
-                <p><strong>Rental Provider:</strong> GearVault Operations Hub</p>
-                <p><strong>Booking Reference:</strong> #{bookingId || 'N/A'}</p>
+                <p><strong>Provider:</strong> GearVault Operations Hub</p>
+                <p><strong>Order Reference:</strong> #{bookingId || 'N/A'}</p>
                 {rentalId && <p><strong>Rental Record:</strong> #{rentalId}</p>}
               </div>
             </div>
@@ -83,26 +82,25 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
 
           {/* Section 2: Equipment & Pre-Rental Condition Inspection */}
           <div className="doc-section">
-            <h4>2. EQUIPMENT SPECIFICATIONS & CONDITION CHECKLIST (FR013 / FR014)</h4>
+            <h4>2. EQUIPMENT SPECIFICATIONS & INSPECTION LOG</h4>
             <div className="grid-2-col">
               <div>
-                <p><strong>Equipment Name:</strong> {item?.name || 'N/A'}</p>
+                <p><strong>Equipment:</strong> {item?.name || 'N/A'}</p>
                 <p><strong>Inventory SKU:</strong> {item?.sku || 'N/A'}</p>
                 <p><strong>Category:</strong> {item?.category?.name || 'General'}</p>
               </div>
               <div>
-                <p><strong>Original Purchase Price:</strong> ₹{item?.purchase_price?.toLocaleString('en-IN') || '0'}</p>
-                <p><strong>Replacement Value:</strong> ₹{item?.replacement_price?.toLocaleString('en-IN') || '0'}</p>
-                <p><strong>Depreciated Worth (Vdep):</strong> ₹{(pricing?.depreciated_value || item?.depreciated_value || item?.purchase_price)?.toLocaleString('en-IN')}</p>
+                <p><strong>Replacement Value:</strong> ₹{item?.purchase_price?.toLocaleString('en-IN') || item?.replacement_price?.toLocaleString('en-IN') || '0'}</p>
+                <p><strong>Current Asset Valuation:</strong> ₹{(pricing?.depreciated_value || item?.depreciated_value || item?.purchase_price)?.toLocaleString('en-IN')}</p>
               </div>
             </div>
 
             <div className="condition-box">
-              <p><strong>Pre-Rental Inspection Notes:</strong></p>
-              <p className="condition-text">{conditionNotes || 'Standard pre-handover physical and electronic functional verification completed. All accessories, caps, and batteries checked.'}</p>
+              <p><strong>Inspection Checklist:</strong></p>
+              <p className="condition-text">{conditionNotes || 'Pre-dispatch hardware and operational verification completed. All factory accessories, caps, and batteries inspected.'}</p>
               {photoUrl && (
-                <p className="small muted" style={{ marginTop: 4 }}>
-                  📷 Pre-Rental Photo Reference Logged: <a href={photoUrl} target="_blank" rel="noreferrer" className="inline-link">{photoUrl}</a>
+                <p className="small muted" style={{ marginTop: 6 }}>
+                  📷 Inspection Photo Reference: <a href={photoUrl} target="_blank" rel="noreferrer" className="inline-link">{photoUrl}</a>
                 </p>
               )}
             </div>
@@ -113,41 +111,41 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
             <h4>3. RENTAL TIMELINE & RETURN SCHEDULE</h4>
             <div className="grid-2-col">
               <div>
-                <p><strong>Handover / Start Time:</strong> {formatTime(checkoutAt || startTs)}</p>
-                <p><strong>Return Due Date:</strong> <span style={{ color: '#c2410c', fontWeight: 600 }}>{formatTime(endTs)}</span></p>
+                <p><strong>Collection / Handover:</strong> {formatTime(checkoutAt || startTs)}</p>
+                <p><strong>Scheduled Return:</strong> <span style={{ color: '#c9251d', fontWeight: 600 }}>{formatTime(endTs)}</span></p>
               </div>
               <div>
-                <p><strong>Billable Duration:</strong> {pricing?.duration_days || 1} Day(s)</p>
-                <p><strong>Pricing Tier Applied:</strong> {pricing?.duration_tier || 'Daily'} Tier Multiplier</p>
+                <p><strong>Rental Period:</strong> {pricing?.duration_days || 1} Day(s)</p>
+                <p><strong>Rate Structure:</strong> Standard Multiplier Schedule</p>
               </div>
             </div>
           </div>
 
           {/* Section 4: Financial Breakdown */}
           <div className="doc-section">
-            <h4>4. FINANCIAL BREAKDOWN & DEPOSIT TERMS</h4>
+            <h4>4. FINANCIAL SCHEDULE & DEPOSIT ESCROW</h4>
             <table className="agreement-table">
               <thead>
                 <tr>
-                  <th>Description</th>
+                  <th>Line Item</th>
                   <th>Calculation Basis</th>
                   <th style={{ textAlign: 'right' }}>Amount</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>Dynamic Rental Charges</td>
-                  <td>{pricing?.duration_days || 1} day(s) @ {pricing?.duration_tier || 'Daily'} Tier (Depreciated Value × Multiplier)</td>
+                  <td>Rental Charges</td>
+                  <td>{pricing?.duration_days || 1} day(s) calculated against current asset valuation</td>
                   <td style={{ textAlign: 'right' }}>₹{(pricing?.rental_price || 0).toLocaleString('en-IN')}</td>
                 </tr>
                 <tr>
                   <td>Refundable Security Deposit</td>
-                  <td>20% of Current Depreciated Valuation (Collateral against damage/late return)</td>
+                  <td>20% Collateral Escrow (Refundable upon post-rental inspection)</td>
                   <td style={{ textAlign: 'right' }}>₹{(depositAmount || pricing?.deposit_amount || 0).toLocaleString('en-IN')}</td>
                 </tr>
                 <tr className="highlight-row">
-                  <td><strong>Total Security Deposit Paid</strong></td>
-                  <td>Confirmed via {paymentProvider || 'Simulated Payment Gateway'}</td>
+                  <td><strong>Security Deposit Authorized</strong></td>
+                  <td>Confirmed via {paymentProvider || 'Secure Gateway'}</td>
                   <td style={{ textAlign: 'right' }}><strong>₹{(depositAmount || pricing?.deposit_amount || 0).toLocaleString('en-IN')}</strong></td>
                 </tr>
               </tbody>
@@ -156,19 +154,19 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
 
           {/* Section 5: Binding Terms & Legal Business Rules */}
           <div className="doc-section">
-            <h4>5. TERMS OF SERVICE & BINDING BUSINESS RULES</h4>
+            <h4>5. TERMS OF SERVICE & RETURN POLICIES</h4>
             <ol className="terms-list">
               <li>
-                <strong>Late Return Penalty (BR4 / FR022):</strong> Equipment must be returned to the counter on or before the Return Due Date. Overdue rentals incur a mandatory flat daily penalty for each day past due. Staff cannot waive penalties without Manager authorization.
+                <strong>Late Return Policy:</strong> Equipment must be returned to the counter on or before the agreed Return Date. Unreturned equipment incurs standard daily penalty assessments until officially checked in.
               </li>
               <li>
-                <strong>Presumed Lost Escalation (FR023):</strong> Equipment remaining unreturned past 7 days overdue is escalated to "Presumed Lost" status, and the customer is liable for the full replacement value (₹{item?.replacement_price?.toLocaleString('en-IN') || '0'}).
+                <strong>Unreturned Equipment Liability:</strong> Equipment unreturned past 7 consecutive days beyond the scheduled date is escalated to lost asset status, incurring full replacement liability (₹{item?.replacement_price?.toLocaleString('en-IN') || item?.purchase_price?.toLocaleString('en-IN') || '0'}).
               </li>
               <li>
-                <strong>Damage Assessment & Deposit Deductions (FR018):</strong> Upon return, the equipment is inspected against pre-rental condition. Any damage is categorized (Cosmetic, Functional, or Major Loss) and scored (1–5). Deductions are calculated automatically and deducted from the deposit.
+                <strong>Condition Verification & Deposit Adjustments:</strong> Returned equipment is inspected against pre-dispatch records. Any identified damages are categorized systematically and deducted from the deposit balance.
               </li>
               <li>
-                <strong>Dispute Rights (BR3 / FR019 / FR020):</strong> The customer has the right to dispute damage assessments. Disputed deductions are reviewed and finalized directly by the Store Manager.
+                <strong>Dispute Resolution:</strong> Clients retain the right to request supervisory management review for any damage assessments or deposit adjustments.
               </li>
             </ol>
           </div>
@@ -177,17 +175,17 @@ export default function RentalAgreementModal({ isOpen, onClose, data }) {
           <div className="doc-section signatures-section">
             <div className="grid-2-col">
               <div className="signature-box">
-                <p className="small muted">Customer Digital Acknowledgment:</p>
+                <p className="small muted">Client Digital Authorization:</p>
                 <div className="sig-stamp">
-                  ✓ DIGITALLY ACCEPTED & CONFIRMED<br />
+                  ✓ DIGITALLY EXECUTED & CONFIRMED<br />
                   <span className="small">{customer?.email || 'Customer'} • {todayStr}</span>
                 </div>
               </div>
               <div className="signature-box">
-                <p className="small muted">Authorized Rental Desk Officer:</p>
+                <p className="small muted">Authorized Operations Officer:</p>
                 <div className="sig-stamp staff-stamp">
-                  ✓ VERIFIED & ISSUED<br />
-                  <span className="small">GearVault Desk Operations • Station #01</span>
+                  ✓ VERIFIED & DISPATCHED<br />
+                  <span className="small">GearVault Operations Desk • Station #01</span>
                 </div>
               </div>
             </div>
