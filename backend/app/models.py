@@ -46,6 +46,8 @@ class Item(db.Model):
     sku = db.Column(db.Text, unique=True, nullable=True)
     name = db.Column(db.String(255), nullable=False, index=True)
     description = db.Column(db.Text)
+    # Path within the Supabase Storage bucket, not a full URL.
+    image_path = db.Column(db.Text, nullable=True)
     purchase_price = db.Column(db.Numeric(12, 2), nullable=False)
     purchase_date = db.Column(db.Date, nullable=True)
     replacement_price = db.Column(db.Numeric(12, 2), nullable=False)
@@ -67,6 +69,7 @@ class Item(db.Model):
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "image_path": self.image_path,
             "sku": self.sku,
             "category": self.category.to_dict() if self.category else None,
             "purchase_price": float(self.purchase_price),

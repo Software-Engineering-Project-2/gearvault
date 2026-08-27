@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
+import { supabase } from '../lib/supabaseClient'
 
 const localInputValue = date => {
   const pad = value => String(value).padStart(2, '0')
@@ -12,6 +13,16 @@ const futureLocal = hours => {
   return localInputValue(d)
 }
 const toIso = value => new Date(value).toISOString()
+
+const getItemImageUrl = imagePath => {
+  if (!imagePath) return null
+  if (/^https?:\/\//i.test(imagePath)) return imagePath
+
+  const bucket = import.meta.env.VITE_SUPABASE_ITEMS_BUCKET || 'item-images'
+  const path = imagePath.replace(/^\/+/, '')
+  const storagePath = path.startsWith(`${bucket}/`) ? path.slice(bucket.length + 1) : path
+  return supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
+}
 
 export default function Dashboard() {
   const [items, setItems] = useState([])
@@ -140,6 +151,16 @@ export default function Dashboard() {
             {items.length ? (
               items.map(item => (
                 <article className="item-card" key={item.id}>
+                  {getItemImageUrl(item.image_path) && (
+                    <div className="catalog-item-image-wrap">
+                      <img
+                        className="catalog-item-image"
+                        src={getItemImageUrl(item.image_path)}
+                        alt={item.name}
+                        onError={event => { event.currentTarget.parentElement.hidden = true }}
+                      />
+                    </div>
+                  )}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                       <h4 style={{ margin: 0 }}>

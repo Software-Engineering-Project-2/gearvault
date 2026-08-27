@@ -506,6 +506,61 @@ textarea:focus {
   margin-top: auto;
 }
 
+.catalog-item-image-wrap {
+  height: 120px;
+  display: flex;
+  justify-content: center;
+  margin: -4px 0 2px;
+}
+
+.catalog-item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+/* Catalog cards use a product thumbnail instead of the pricing summary. */
+.item-card .pricing-preview-box {
+  display: none;
+}
+
+.item-detail-image-wrap {
+  width: min(100%, 380px);
+  height: 260px;
+  margin: 0 auto 20px;
+  overflow: hidden;
+}
+
+.item-detail-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Makes the white background in the supplied product images blend into the page. */
+  mix-blend-mode: multiply;
+}
+
+.item-detail-page .right {
+  align-self: start;
+  min-height: 0;
+}
+
+.item-availability-card {
+  padding: 22px;
+}
+
+.item-date-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 16px;
+}
+
+.item-date-fields input {
+  min-width: 0;
+}
+
 .pricing-preview-box {
   background: #fbfbfd;
   padding: 12px 14px;

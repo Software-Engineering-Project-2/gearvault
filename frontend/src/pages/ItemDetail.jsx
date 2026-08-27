@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { api, getUser } from '../lib/api'
 import SignInPromptModal from '../components/SignInPromptModal'
+import { supabase } from '../lib/supabaseClient'
 
 const localInputValue = date => {
   const pad = value => String(value).padStart(2, '0')
@@ -22,6 +23,21 @@ const toLocalDateTimeValue = value => {
   return Number.isNaN(date.getTime()) ? value : localInputValue(date)
 }
 
+const getItemImageUrl = imagePath => {
+  if (!imagePath) return null
+  if (/^https?:\/\//i.test(imagePath)) return imagePath
+
+  const bucket = import.meta.env.VITE_SUPABASE_ITEMS_BUCKET || 'item-images'
+  // Existing rows may include the bucket name (for example,
+  // "product_images/camera.png"). Storage APIs expect a path inside the bucket.
+  const bucketPrefix = `${bucket}/`
+  const storagePath = imagePath.replace(/^\/+/, '').startsWith(bucketPrefix)
+    ? imagePath.replace(/^\/+/, '').slice(bucketPrefix.length)
+    : imagePath.replace(/^\/+/, '')
+
+  return supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
+}
+
 export default function ItemDetail() {
   const { itemId } = useParams()
   const navigate = useNavigate()
@@ -33,6 +49,7 @@ export default function ItemDetail() {
   const [message, setMessage] = useState('')
   const [isSuccess, setIsSuccess] = useState(false)
   const [selectedAction, setSelectedAction] = useState(null)
+  const imageUrl = getItemImageUrl(item?.image_path)
 
   // Initialize start/end dates from state, query parameter, or fallback
   const initialStart = toLocalDateTimeValue(
@@ -143,6 +160,17 @@ export default function ItemDetail() {
         </p>
       </div>
 
+      {imageUrl && (
+        <div className="item-detail-image-wrap">
+          <img
+            className="item-detail-image"
+            src={imageUrl}
+            alt={item.name}
+            onError={event => { event.currentTarget.parentElement.hidden = true }}
+          />
+        </div>
+      )}
+
       {message && (
         <div className={`notice ${isSuccess ? 'success' : 'error'}`} style={{ marginBottom: 20 }}>
           {message}
@@ -152,7 +180,7 @@ export default function ItemDetail() {
       <div className="grid">
         {/* Left Column: Equipment Description and Valuation Info */}
         <div className="left">
-          <div className="card">
+          <div className="card item-details-card">
             <h3>Specifications & Details</h3>
             <p style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
               {item.description || 'No detailed specifications provided.'}
@@ -189,11 +217,11 @@ export default function ItemDetail() {
 
         {/* Right Column: Date Selection, Live Availability, Booking Actions */}
         <div className="right">
-          <div className="card">
+          <div className="card item-availability-card">
             <h3>Live Availability Calendar</h3>
             <p className="muted small" style={{ margin: '4px 0 0' }}>Choose your rental window to refresh availability and pricing.</p>
 
-            <div className="filters" style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '16px 0 20px', padding: 0 }}>
+            <div className="item-date-fields">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Rental Start</label>
                 <input

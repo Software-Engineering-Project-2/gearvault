@@ -29,6 +29,8 @@ create table if not exists items (
   sku text unique,
   name text not null,
   description text,
+  -- Relative path in the Supabase Storage item-images bucket.
+  image_path text,
   purchase_price numeric(12,2) not null,
   purchase_date date,
   replacement_price numeric(12,2) not null,
@@ -36,6 +38,9 @@ create table if not exists items (
   active boolean default true,
   created_at timestamptz default now()
 );
+
+-- Supports databases created with an earlier version of this schema.
+alter table items add column if not exists image_path text;
 
 -- Bookings and rentals (created without public access)
 create table if not exists bookings (
