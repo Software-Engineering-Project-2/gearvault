@@ -161,6 +161,55 @@ def list_items():
     return jsonify({"items": result})
 
 
+@catalog_bp.get("/items/<int:item_id>")
+def get_item(item_id):
+    expire_holds()
+    item = Item.query.filter_by(id=item_id, active=True).first()
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+
+    try:
+        start = (
+            parse_time(request.args.get("start_ts"))
+            if request.args.get("start_ts")
+            else None
+        )
+        end = (
+            parse_time(request.args.get("end_ts"))
+            if request.args.get("end_ts")
+            else None
+        )
+        if (
+            (start and not end)
+            or (end and not start)
+            or (start and end and start >= end)
+        ):
+            raise ValueError("Provide a valid availability window")
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+
+    data = item.to_dict()
+    data["available"] = availability(item, start, end) if start else True
+    if start and end:
+        cat_name = item.category.name if item.category else None
+        pricing = calculate_rental_pricing(
+            purchase_price=item.purchase_price,
+            purchase_date=item.purchase_date,
+            start_ts=start,
+            end_ts=end,
+            category_name=cat_name,
+            replacement_price=item.replacement_price,
+        )
+        data["pricing"] = pricing
+        data["estimated_price"] = pricing["rental_price"]
+        data["estimated_deposit"] = pricing["deposit_amount"]
+        data["duration_days"] = pricing["duration_days"]
+        data["duration_tier"] = pricing["duration_tier"]
+
+    return jsonify({"item": data})
+
+
+
 @catalog_bp.post("/bookings/hold")
 @customer_required
 def create_hold():

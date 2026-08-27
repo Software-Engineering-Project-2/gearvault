@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { api, getUser } from '../lib/api'
-import SignInPromptModal from '../components/SignInPromptModal'
+import { Link } from 'react-router-dom'
+import { api } from '../lib/api'
 
 const localInputValue = date => {
   const pad = value => String(value).padStart(2, '0')
@@ -14,7 +14,6 @@ const futureLocal = hours => {
 const toIso = value => new Date(value).toISOString()
 
 export default function Dashboard() {
-  const [user] = useState(getUser())
   const [items, setItems] = useState([])
   const [categories, setCategories] = useState([])
   const [search, setSearch] = useState('')
@@ -23,7 +22,6 @@ export default function Dashboard() {
   const [end, setEnd] = useState(futureLocal(48))
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [selectedHoldItem, setSelectedHoldItem] = useState(null)
 
   // One hour buffer ensures a datetime-local value cannot already be in the past.
   const minimumStart = useMemo(() => futureLocal(1), [])
@@ -68,29 +66,7 @@ export default function Dashboard() {
     }
   }
 
-  async function hold(item) {
-    if (!isWindowValid) return
 
-    // If user is not signed in, show Sign In Prompt Modal
-    if (!user) {
-      setSelectedHoldItem(item)
-      return
-    }
-
-    try {
-      const d = await api('/bookings/hold', {
-        method: 'POST',
-        body: JSON.stringify({ item_id: item.id, start_ts: toIso(start), end_ts: toIso(end) })
-      })
-      setMessage(
-        `Reservation hold placed for ${item.name}. Active for 15 minutes. Deposit: ₹${d.booking.deposit_amount}.`
-      )
-      loadCatalog()
-    } catch (e) {
-      setMessage(e.message)
-      loadCatalog()
-    }
-  }
 
   return (
     <div>
@@ -166,7 +142,11 @@ export default function Dashboard() {
                 <article className="item-card" key={item.id}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                      <h4 style={{ margin: 0 }}>{item.name}</h4>
+                      <h4 style={{ margin: 0 }}>
+                        <Link to={`/items/${item.id}`} state={{ start, end }} style={{ color: 'inherit', textDecoration: 'none' }}>
+                          {item.name}
+                        </Link>
+                      </h4>
                       {item.sku && <span className="badge" style={{ fontSize: 11 }}>{item.sku}</span>}
                     </div>
                     <p className="muted small" style={{ margin: '4px 0 10px' }}>
@@ -204,13 +184,13 @@ export default function Dashboard() {
                     <span className={`badge ${item.available ? 'available' : 'unavailable'}`}>
                       {item.available ? '● Available' : '● In Use'}
                     </span>
-                    <button
+                    <Link
+                      to={`/items/${item.id}`}
+                      state={{ start, end }}
                       className="btn"
-                      disabled={!item.available || !isWindowValid}
-                      onClick={() => hold(item)}
                     >
-                      {item.available ? 'Reserve Gear' : 'Unavailable'}
-                    </button>
+                      View Details & Book
+                    </Link>
                   </div>
                 </article>
               ))
@@ -221,13 +201,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Guest Sign-In Prompt Modal when reserving without authentication */}
-      <SignInPromptModal
-        isOpen={Boolean(selectedHoldItem)}
-        onClose={() => setSelectedHoldItem(null)}
-        title="Sign In to Reserve Equipment"
-        message={`Please sign in or create an account to place a 15-minute reservation hold on ${selectedHoldItem?.name || 'this item'}.`}
-      />
+
     </div>
   )
 }

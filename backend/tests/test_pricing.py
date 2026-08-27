@@ -170,6 +170,42 @@ class TestPricingAPI(unittest.TestCase):
         self.assertEqual(data["pricing"]["duration_tier"], "Daily")
         self.assertGreater(data["pricing"]["rental_price"], 0)
 
+    def test_get_item_endpoint(self):
+        """GET /api/items/<item_id> returns item details and optional pricing calculation."""
+        # 1. Test basic retrieval without dates
+        response = self.client.get(f"/api/items/{self.item_id}")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("item", data)
+        self.assertEqual(data["item"]["name"], "Test Camera")
+        self.assertTrue(data["item"]["available"])
+        self.assertNotIn("pricing", data["item"])
+
+        # 2. Test retrieval with valid date parameters
+        base = datetime(2026, 9, 1, 10, 0, tzinfo=timezone.utc)
+        start = base.isoformat().replace("+00:00", "Z")
+        end = (base + timedelta(days=3)).isoformat().replace("+00:00", "Z")
+        response = self.client.get(
+            f"/api/items/{self.item_id}?start_ts={start}&end_ts={end}"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("item", data)
+        self.assertIn("pricing", data["item"])
+        self.assertEqual(data["item"]["pricing"]["duration_days"], 3)
+        self.assertTrue(data["item"]["available"])
+
+        # 3. Test non-existent item
+        response = self.client.get("/api/items/99999")
+        self.assertEqual(response.status_code, 404)
+
+        # 4. Test invalid window
+        response = self.client.get(
+            f"/api/items/{self.item_id}?start_ts={end}&end_ts={start}"
+        )
+        self.assertEqual(response.status_code, 400)
+
+
 
 if __name__ == "__main__":
     unittest.main()

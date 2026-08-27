@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
+import ItemDetail from './pages/ItemDetail'
 import Bookings from './pages/Bookings'
 import Checkout from './pages/Checkout'
 import StaffQueue from './pages/StaffQueue'
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/signup" element={<Signup onAuthenticated={setUser} />} />
           {/* Public Catalog Browsing */}
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/items/:itemId" element={<ItemDetail />} />
           {/* Protected Routes */}
           <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
           <Route path="/checkout/:bookingId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
