@@ -91,12 +91,22 @@ create table if not exists damage_types (
 
 create table if not exists damage_assessments (
   id serial primary key,
-  rental_id int not null references rentals(id) on delete cascade,
+  rental_id int not null references rentals(id) on delete cascade unique,
   assessed_by uuid references auth.users(id),
   severity int check (severity >= 1 and severity <= 5),
   damage_type_id int references damage_types(id),
   notes text,
-  deduction numeric(12,2),
+  damage_deduction numeric(12,2) default 0.0,
+  late_penalty numeric(12,2) default 0.0,
+  replacement_charge numeric(12,2) default 0.0,
+  total_deduction numeric(12,2) default 0.0,
+  deposit_refunded numeric(12,2) default 0.0,
+  status text not null default 'assessed', -- assessed, disputed, resolved, finalized
+  dispute_reason text,
+  disputed_at timestamptz,
+  manager_override_amount numeric(12,2),
+  manager_notes text,
+  resolved_at timestamptz,
   created_at timestamptz default now()
 );
 

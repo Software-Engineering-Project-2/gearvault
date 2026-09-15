@@ -7,6 +7,7 @@ import ItemDetail from './pages/ItemDetail'
 import Bookings from './pages/Bookings'
 import Checkout from './pages/Checkout'
 import StaffQueue from './pages/StaffQueue'
+import Analytics from './pages/Analytics'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
 import { getUser } from './lib/api'
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
           <Route path="/checkout/:bookingId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
           <Route path="/staff" element={<ProtectedRoute><StaffQueue /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
         </Routes>
       </div>
     </>

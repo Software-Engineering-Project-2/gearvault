@@ -133,6 +133,7 @@ class Booking(db.Model):
             "rental_price": pricing_data["rental_price"] if pricing_data else None,
             "duration_tier": pricing_data["duration_tier"] if pricing_data else None,
             "duration_days": pricing_data["duration_days"] if pricing_data else None,
+            "rental": self.rental.to_dict() if getattr(self, "rental", None) else None,
         }
 
 
@@ -154,7 +155,12 @@ class Rental(db.Model):
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     item = db.relationship("Item")
-    booking = db.relationship("Booking")
+    booking = db.relationship(
+        "Booking", backref=db.backref("rental", uselist=False)
+    )
+    damage_assessment = db.relationship(
+        "DamageAssessment", back_populates="rental", uselist=False
+    )
 
     def to_dict(self):
         return {
@@ -170,6 +176,9 @@ class Rental(db.Model):
             "total_price": float(self.total_price) if self.total_price else None,
             "deposit_held": float(self.deposit_held) if self.deposit_held else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "damage_assessment": (
+                self.damage_assessment.to_dict() if self.damage_assessment else None
+            ),
         }
 
 
@@ -220,4 +229,129 @@ class ItemConditionLog(db.Model):
             "notes": self.notes,
             "captured_at": self.captured_at.isoformat() if self.captured_at else None,
         }
+
+
+class DamageType(db.Model):
+    __tablename__ = "damage_types"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    weight = db.Column(db.Numeric(4, 2), nullable=False, default=1.0)
+    description = db.Column(db.String(255), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "weight": float(self.weight),
+            "description": self.description,
+        }
+
+
+class DamageAssessment(db.Model):
+    __tablename__ = "damage_assessments"
+    id = db.Column(db.Integer, primary_key=True)
+    rental_id = db.Column(
+        db.Integer, db.ForeignKey("rentals.id"), nullable=False, unique=True, index=True
+    )
+    assessed_by = db.Column(db.String(36), nullable=True)
+    damage_type_id = db.Column(
+        db.Integer, db.ForeignKey("damage_types.id"), nullable=True, index=True
+    )
+    severity = db.Column(db.Integer, nullable=True)  # 1 to 5
+    notes = db.Column(db.Text, nullable=True)
+    damage_deduction = db.Column(db.Numeric(12, 2), nullable=False, default=0.0)
+    late_penalty = db.Column(db.Numeric(12, 2), nullable=False, default=0.0)
+    replacement_charge = db.Column(db.Numeric(12, 2), nullable=False, default=0.0)
+    total_deduction = db.Column(db.Numeric(12, 2), nullable=False, default=0.0)
+    deposit_refunded = db.Column(db.Numeric(12, 2), nullable=False, default=0.0)
+    status = db.Column(
+        db.String(50), nullable=False, default="assessed"
+    )  # assessed, disputed, resolved, finalized
+    dispute_reason = db.Column(db.Text, nullable=True)
+    disputed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    manager_override_amount = db.Column(db.Numeric(12, 2), nullable=True)
+    manager_notes = db.Column(db.Text, nullable=True)
+    resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    rental = db.relationship("Rental", back_populates="damage_assessment")
+    damage_type = db.relationship("DamageType")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "rental_id": self.rental_id,
+            "assessed_by": self.assessed_by,
+            "damage_type": self.damage_type.to_dict() if self.damage_type else None,
+            "severity": self.severity,
+            "notes": self.notes,
+            "damage_deduction": (
+                float(self.damage_deduction)
+                if self.damage_deduction is not None
+                else 0.0
+            ),
+            "late_penalty": (
+                float(self.late_penalty) if self.late_penalty is not None else 0.0
+            ),
+            "replacement_charge": (
+                float(self.replacement_charge)
+                if self.replacement_charge is not None
+                else 0.0
+            ),
+            "total_deduction": (
+                float(self.total_deduction)
+                if self.total_deduction is not None
+                else 0.0
+            ),
+            "deposit_refunded": (
+                float(self.deposit_refunded)
+                if self.deposit_refunded is not None
+                else 0.0
+            ),
+            "status": self.status,
+            "dispute_reason": self.dispute_reason,
+            "disputed_at": (
+                self.disputed_at.isoformat() if self.disputed_at else None
+            ),
+            "manager_override_amount": (
+                float(self.manager_override_amount)
+                if self.manager_override_amount is not None
+                else None
+            ),
+            "manager_notes": self.manager_notes,
+            "resolved_at": (
+                self.resolved_at.isoformat() if self.resolved_at else None
+            ),
+            "created_at": (
+                self.created_at.isoformat() if self.created_at else None
+            ),
+        }
+
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(36), nullable=False, index=True)
+    type = db.Column(db.String(50), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "type": self.type,
+            "title": self.title,
+            "message": self.message,
+            "read": self.read,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 

@@ -11,9 +11,11 @@ const formatTime = value => {
 }
 
 export default function StaffQueue() {
-  const [activeTab, setActiveTab] = useState('confirmed') // 'confirmed' | 'active_rentals'
+  const [activeTab, setActiveTab] = useState('confirmed') // 'confirmed' | 'active_rentals' | 'disputes'
   const [confirmedBookings, setConfirmedBookings] = useState([])
   const [activeRentals, setActiveRentals] = useState([])
+  const [damageTypes, setDamageTypes] = useState([])
+  const [disputes, setDisputes] = useState([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -27,16 +29,40 @@ export default function StaffQueue() {
   const [processingHandover, setProcessingHandover] = useState(false)
   const [selectedAgreementData, setSelectedAgreementData] = useState(null)
 
+  // Return & Damage modal state (Increment 4)
+  const [returnRental, setReturnRental] = useState(null)
+  const [returnNotes, setReturnNotes] = useState('')
+  const [returnPhotoUrl, setReturnPhotoUrl] = useState('')
+  const [hasDamage, setHasDamage] = useState(false)
+  const [damageTypeId, setDamageTypeId] = useState('')
+  const [severity, setSeverity] = useState(1)
+  const [forcePresumedLost, setForcePresumedLost] = useState(false)
+  const [processingReturn, setProcessingReturn] = useState(false)
+
+  // Manager Override state (Increment 4)
+  const [overrideAssessmentId, setOverrideAssessmentId] = useState(null)
+  const [overrideAmount, setOverrideAmount] = useState('')
+  const [overrideNotes, setOverrideNotes] = useState('')
+  const [processingOverride, setProcessingOverride] = useState(false)
+
   const loadData = async () => {
     setLoading(true)
     setError('')
     try {
-      const [bRes, rRes] = await Promise.all([
+      const [bRes, rRes, dtRes, dRes] = await Promise.all([
         api('/staff/bookings/confirmed'),
-        api('/staff/rentals/active')
+        api('/staff/rentals/active'),
+        api('/damage-types').catch(() => ({ damage_types: [] })),
+        api('/staff/disputes').catch(() => ({ disputes: [] }))
       ])
       setConfirmedBookings(bRes.bookings || [])
       setActiveRentals(rRes.rentals || [])
+      const types = dtRes.damage_types || []
+      setDamageTypes(types)
+      if (types.length > 0 && !damageTypeId) {
+        setDamageTypeId(types[0].id)
+      }
+      setDisputes(dRes.disputes || [])
     } catch (err) {
       setError(err.message || 'Failed to load counter operations queue.')
     } finally {
@@ -76,6 +102,125 @@ export default function StaffQueue() {
     }
   }
 
+  const handleReturnSubmit = async (e) => {
+    e.preventDefault()
+    if (!returnRental) return
+    setProcessingReturn(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const payload = {
+        notes: returnNotes,
+        photo_url: returnPhotoUrl,
+        has_damage: hasDamage,
+        damage_type_id: hasDamage ? Number(damageTypeId) : null,
+        severity: hasDamage ? Number(severity) : null,
+        force_presumed_lost: forcePresumedLost,
+      }
+
+      const res = await api(`/staff/rentals/${returnRental.id}/return`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+
+      setMessage(res.message || 'Return checked in and deposit settlement processed.')
+      setReturnRental(null)
+      setHasDamage(false)
+      setSeverity(1)
+      setReturnNotes('')
+      setReturnPhotoUrl('')
+      setForcePresumedLost(false)
+      loadData()
+    } catch (err) {
+      setError(err.message || 'Failed to process equipment return.')
+    } finally {
+      setProcessingReturn(false)
+    }
+  }
+
+  const handleOverrideSubmit = async (e, assessmentId) => {
+    e.preventDefault()
+    if (!assessmentId) return
+    setProcessingOverride(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const res = await api(`/manager/disputes/${assessmentId}/override`, {
+        method: 'POST',
+        body: JSON.stringify({
+          override_amount: Number(overrideAmount),
+          manager_notes: overrideNotes || 'Manager direct override applied.',
+        })
+      })
+
+      setMessage(res.message || 'Dispute successfully resolved and final settlement confirmed.')
+      setOverrideAssessmentId(null)
+      setOverrideAmount('')
+      setOverrideNotes('')
+      loadData()
+    } catch (err) {
+      setError(err.message || 'Failed to apply manager override.')
+    } finally {
+      setProcessingOverride(false)
+    }
+  }
+
+  // Calculate live return preview figures
+  const calculateReturnPreview = () => {
+    if (!returnRental) return null
+    const depVal = Number(returnRental.item?.depreciated_value || 0)
+    const replPrice = Number(returnRental.item?.replacement_price || 0)
+    const depHeld = Number(returnRental.deposit_held || 0)
+    const dueAt = new Date(returnRental.due_at)
+    const now = new Date()
+    const isOverdue = now > dueAt
+    const overdueSeconds = Math.max(0, (now - dueAt) / 1000)
+    const overdueDays = overdueSeconds > 60 ? Math.max(1, Math.ceil((overdueSeconds - 60) / 86400)) : 0
+    const latePenalty = overdueDays * 500
+    const isPresumedLost = forcePresumedLost || overdueDays >= 7
+
+    const selectedType = damageTypes.find(dt => dt.id === Number(damageTypeId))
+    const weight = selectedType ? Number(selectedType.weight) : 0.0
+
+    let damageDeduction = 0
+    let replacementCharge = 0
+    let totalDeduction = 0
+
+    if (isPresumedLost) {
+      replacementCharge = replPrice
+      totalDeduction = replacementCharge + latePenalty
+    } else {
+      if (hasDamage && weight > 0) {
+        damageDeduction = Math.min(depVal, Math.round(Number(severity) * weight * depVal * 100) / 100)
+      }
+      totalDeduction = damageDeduction + latePenalty
+    }
+
+    const netRefund = Math.max(0, Math.round((depHeld - totalDeduction) * 100) / 100)
+    const balanceOwed = Math.max(0, Math.round((totalDeduction - depHeld) * 100) / 100)
+
+    return {
+      depVal,
+      replPrice,
+      depHeld,
+      isOverdue,
+      overdueDays,
+      latePenalty,
+      isPresumedLost,
+      damageDeduction,
+      replacementCharge,
+      totalDeduction,
+      netRefund,
+      balanceOwed,
+      selectedTypeName: selectedType ? selectedType.name : 'None',
+      weightPercentage: Math.round(weight * 100)
+    }
+  }
+
+  const preview = calculateReturnPreview()
+
   // Filter lists based on search
   const filteredBookings = confirmedBookings.filter(b => {
     const q = search.toLowerCase()
@@ -95,6 +240,16 @@ export default function StaffQueue() {
     )
   })
 
+  const filteredDisputes = disputes.filter(d => {
+    const q = search.toLowerCase()
+    return (
+      d.rental?.item?.name?.toLowerCase().includes(q) ||
+      d.rental?.item?.sku?.toLowerCase().includes(q) ||
+      String(d.id).includes(q) ||
+      d.dispute_reason?.toLowerCase().includes(q)
+    )
+  })
+
   return (
     <div className="staff-queue-page">
       <div className="card">
@@ -102,7 +257,7 @@ export default function StaffQueue() {
           <div>
             <h2>Counter Dispatch & Operations</h2>
             <p className="muted" style={{ margin: '4px 0 0' }}>
-              Manage counter collection handovers, verify equipment condition, and track active client rentals.
+              Manage counter collection handovers, check in returned equipment with damage assessment, and oversee customer disputes.
             </p>
           </div>
           <button className="btn secondary sm" onClick={loadData} disabled={loading}>
@@ -114,19 +269,25 @@ export default function StaffQueue() {
         {error && <div className="notice error" style={{ marginTop: 14 }}>{error}</div>}
       </div>
 
-      {/* Apple Segmented Control */}
-      <div className="payment-tabs" style={{ margin: '0 0 16px', maxWidth: 440 }}>
+      {/* Segmented Control Tabs */}
+      <div className="payment-tabs" style={{ margin: '0 0 16px', maxWidth: 640 }}>
         <button
           className={`tab-btn ${activeTab === 'confirmed' ? 'active' : ''}`}
           onClick={() => setActiveTab('confirmed')}
         >
-          📦 Ready for Collection ({confirmedBookings.length})
+          📦 Collection Queue ({confirmedBookings.length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'active_rentals' ? 'active' : ''}`}
           onClick={() => setActiveTab('active_rentals')}
         >
-          🚚 Active Rentals ({activeRentals.length})
+          🚚 Active Field Rentals ({activeRentals.length})
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'disputes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('disputes')}
+        >
+          ⚖️ Disputes & Overrides ({disputes.length})
         </button>
       </div>
 
@@ -136,11 +297,17 @@ export default function StaffQueue() {
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder={`Search ${activeTab === 'confirmed' ? 'collection queue' : 'active rentals'} by equipment, SKU, or order ID...`}
+          placeholder={`Search ${
+            activeTab === 'confirmed'
+              ? 'collection queue'
+              : activeTab === 'active_rentals'
+              ? 'active rentals'
+              : 'customer disputes'
+          } by equipment, SKU, or ID...`}
         />
       </div>
 
-      {/* Confirmed Bookings Tab */}
+      {/* 1. Confirmed Bookings Tab */}
       {activeTab === 'confirmed' && (
         <div className="card">
           <div className="card-header">
@@ -191,14 +358,14 @@ export default function StaffQueue() {
         </div>
       )}
 
-      {/* Active Rentals Tab */}
+      {/* 2. Active Rentals Tab */}
       {activeTab === 'active_rentals' && (
         <div className="card">
           <div className="card-header">
             <div>
               <h3>Active Field Rentals</h3>
               <p className="muted small" style={{ margin: '2px 0 0' }}>
-                All equipment currently in active client possession.
+                All equipment currently in active client possession. Select an item to process check-in and damage evaluation.
               </p>
             </div>
           </div>
@@ -229,32 +396,174 @@ export default function StaffQueue() {
                   </div>
 
                   <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                    <button
-                      className="btn secondary sm"
-                      onClick={() => setSelectedAgreementData({
-                        rentalId: r.id,
-                        bookingId: r.booking_id,
-                        item: r.item,
-                        startTs: r.checkout_at,
-                        endTs: r.due_at,
-                        checkoutAt: r.checkout_at,
-                        pricing: {
-                          rental_price: r.total_price,
-                          depreciated_value: r.item?.depreciated_value,
-                          duration_tier: 'Daily Tier',
-                          duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
-                        },
-                        depositAmount: r.deposit_held,
-                        conditionNotes: 'Verified during counter collection inspection.',
-                        customer: { id: r.customer_id },
-                      })}
-                    >
-                      📄 Agreement
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="btn sm"
+                        onClick={() => {
+                          setReturnRental(r)
+                          setHasDamage(false)
+                          setSeverity(1)
+                          setReturnNotes('')
+                          setReturnPhotoUrl('')
+                          setForcePresumedLost(false)
+                          setMessage('')
+                          setError('')
+                        }}
+                      >
+                        📥 Process Return
+                      </button>
+                      <button
+                        className="btn secondary sm"
+                        onClick={() => setSelectedAgreementData({
+                          rentalId: r.id,
+                          bookingId: r.booking_id,
+                          item: r.item,
+                          startTs: r.checkout_at,
+                          endTs: r.due_at,
+                          checkoutAt: r.checkout_at,
+                          pricing: {
+                            rental_price: r.total_price,
+                            depreciated_value: r.item?.depreciated_value,
+                            duration_tier: 'Daily Tier',
+                            duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
+                          },
+                          depositAmount: r.deposit_held,
+                          conditionNotes: 'Verified during counter collection inspection.',
+                          customer: { id: r.customer_id },
+                        })}
+                      >
+                        📄 Agreement
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
             })
+          )}
+        </div>
+      )}
+
+      {/* 3. Disputes & Overrides Tab (FR019, FR020, BR3) */}
+      {activeTab === 'disputes' && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h3>Contested Damage Assessments & Manager Overrides</h3>
+              <p className="muted small" style={{ margin: '2px 0 0' }}>
+                Under Business Rule BR3, only managers can directly finalize or override disputed deductions.
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="empty">Loading customer disputes…</div>
+          ) : filteredDisputes.length === 0 ? (
+            <div className="empty">No active damage assessment disputes on file.</div>
+          ) : (
+            filteredDisputes.map(d => (
+              <div key={d.id} className="dispute-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 17 }}>
+                      {d.rental?.item?.name || 'Equipment Rental'}
+                    </h4>
+                    <p className="small muted" style={{ margin: '2px 0 6px' }}>
+                      Rental #{d.rental_id} • Disputed on {formatTime(d.disputed_at)}
+                    </p>
+                  </div>
+                  <span className="badge disputed">⚠️ Customer Disputed</span>
+                </div>
+
+                {/* Dispute rationale */}
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', margin: '10px 0' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>
+                    CUSTOMER DISPUTE STATEMENT:
+                  </div>
+                  <div style={{ fontSize: 14, color: '#78350f' }}>
+                    "{d.dispute_reason}"
+                  </div>
+                </div>
+
+                {/* Original Assessment details */}
+                <div className="meta-box" style={{ margin: '10px 0' }}>
+                  <div className="meta-row">
+                    <span className="muted">Damage Classification:</span>
+                    <strong>{d.damage_type?.name || 'Damage Assessed'} (Severity Level {d.severity}/5)</strong>
+                  </div>
+                  <div className="meta-row">
+                    <span className="muted">Assessed Damage Deduction:</span>
+                    <strong style={{ color: '#c9251d' }}>₹{d.damage_deduction?.toLocaleString('en-IN')}</strong>
+                  </div>
+                  {d.late_penalty > 0 && (
+                    <div className="meta-row">
+                      <span className="muted">Late Return Fee:</span>
+                      <strong>₹{d.late_penalty?.toLocaleString('en-IN')}</strong>
+                    </div>
+                  )}
+                  <div className="meta-row">
+                    <span className="muted">Initial Deposit Refund:</span>
+                    <strong>₹{d.deposit_refunded?.toLocaleString('en-IN')}</strong>
+                  </div>
+                </div>
+
+                {/* Manager override action */}
+                {overrideAssessmentId === d.id ? (
+                  <form onSubmit={(e) => handleOverrideSubmit(e, d.id)} style={{ marginTop: 14, background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #cbd5e1' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--accent)' }}>
+                      Manager Direct Override Form (BR3)
+                    </div>
+                    <div className="form-row">
+                      <label>Revised Damage Deduction (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={overrideAmount}
+                        onChange={e => setOverrideAmount(e.target.value)}
+                        placeholder="Enter adjusted deduction amount (e.g. 2000)"
+                        required
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label>Manager Resolution Notes</label>
+                      <textarea
+                        rows={2}
+                        value={overrideNotes}
+                        onChange={e => setOverrideNotes(e.target.value)}
+                        placeholder="State business rationale for this deduction override..."
+                        required
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                      <button type="submit" className="btn sm" disabled={processingOverride}>
+                        {processingOverride ? 'Settling…' : 'Confirm Override & Close Rental'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn secondary sm"
+                        onClick={() => setOverrideAssessmentId(null)}
+                        disabled={processingOverride}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div style={{ textAlign: 'right', marginTop: 12 }}>
+                    <button
+                      className="btn secondary sm"
+                      onClick={() => {
+                        setOverrideAssessmentId(d.id)
+                        setOverrideAmount(d.damage_deduction)
+                        setOverrideNotes('')
+                      }}
+                    >
+                      ⚖️ Override Deduction
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </div>
       )}
@@ -362,7 +671,195 @@ export default function StaffQueue() {
         </div>
       )}
 
-      {/* Digital Rental Agreement Modal (FR014) */}
+      {/* Return & Damage Modal (Increment 4) */}
+      {returnRental && preview && (
+        <div className="card" style={{ border: '1px solid #ff7043', marginTop: 24, boxShadow: '0 8px 30px rgba(255, 112, 67, 0.15)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h3>Equipment Check-In & Damage Assessment</h3>
+              <p className="small muted">
+                Rental #{returnRental.id} • Asset: <strong>{returnRental.item?.name}</strong> (SKU: {returnRental.item?.sku || 'N/A'})
+              </p>
+            </div>
+            <span className={`badge ${preview.isOverdue ? 'unavailable' : 'available'}`}>
+              {preview.isOverdue ? `⚠️ ${preview.overdueDays} Days Overdue` : '● On Time Return'}
+            </span>
+          </div>
+
+          <form onSubmit={handleReturnSubmit} style={{ marginTop: 16 }}>
+            {/* Rental Timeline & Values */}
+            <div className="meta-box">
+              <div className="meta-row">
+                <span className="muted">Dispatched Date:</span>
+                <strong>{formatTime(returnRental.checkout_at)}</strong>
+              </div>
+              <div className="meta-row">
+                <span className="muted">Due Date:</span>
+                <strong>{formatTime(returnRental.due_at)}</strong>
+              </div>
+              <div className="meta-row">
+                <span className="muted">Depreciated Asset Value:</span>
+                <strong>₹{preview.depVal.toLocaleString('en-IN')}</strong>
+              </div>
+              <div className="meta-row">
+                <span className="muted">Security Deposit Held:</span>
+                <strong style={{ color: 'var(--accent)' }}>₹{preview.depHeld.toLocaleString('en-IN')}</strong>
+              </div>
+            </div>
+
+            {/* Post-Return Condition Notes & Photos */}
+            <div style={{ marginTop: 14 }}>
+              <div className="form-row">
+                <label>Post-Rental Inspection Notes</label>
+                <textarea
+                  rows={2}
+                  value={returnNotes}
+                  onChange={e => setReturnNotes(e.target.value)}
+                  placeholder="Note physical wear, cleanliness, included accessories, or damaged components..."
+                />
+              </div>
+              <div className="form-row">
+                <label>Post-Return Inspection Photo Reference URL</label>
+                <input
+                  type="text"
+                  value={returnPhotoUrl}
+                  onChange={e => setReturnPhotoUrl(e.target.value)}
+                  placeholder="https://example.com/photos/return-inspection.jpg"
+                />
+              </div>
+            </div>
+
+            {/* Damage Evaluation Section */}
+            <div style={{ margin: '14px 0', padding: 14, background: '#fff', borderRadius: 12, border: '1px solid var(--card-border)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={hasDamage}
+                  onChange={e => setHasDamage(e.target.checked)}
+                  style={{ width: 'auto' }}
+                />
+                Identify Damage or Missing Components (Trigger Algorithmic Deduction)
+              </label>
+
+              {hasDamage && (
+                <div style={{ marginTop: 14 }}>
+                  <div className="form-row">
+                    <label>Damage Classification (FR017)</label>
+                    <select
+                      value={damageTypeId}
+                      onChange={e => setDamageTypeId(e.target.value)}
+                    >
+                      {damageTypes.map(dt => (
+                        <option key={dt.id} value={dt.id}>
+                          {dt.name} — {Math.round(dt.weight * 100)}% base rate ({dt.description})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-row">
+                    <label style={{ marginBottom: 4, display: 'block' }}>
+                      Severity Score (1 to 5) — FR018
+                    </label>
+                    <div className="severity-selector">
+                      {[1, 2, 3, 4, 5].map(score => {
+                        const labels = ['1 (Negligible)', '2 (Minor)', '3 (Moderate)', '4 (Serious)', '5 (Critical)']
+                        return (
+                          <button
+                            type="button"
+                            key={score}
+                            className={`severity-pill ${severity === score ? 'active' : ''}`}
+                            onClick={() => setSeverity(score)}
+                          >
+                            {labels[score - 1]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Presumed Lost escalation (FR023) */}
+            <div style={{ margin: '10px 0 16px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: '#991b1b' }}>
+                <input
+                  type="checkbox"
+                  checked={forcePresumedLost}
+                  onChange={e => setForcePresumedLost(e.target.checked)}
+                  style={{ width: 'auto' }}
+                />
+                Force Escalate to "Presumed Lost" (Charge full replacement value ₹{preview.replPrice.toLocaleString('en-IN')})
+              </label>
+            </div>
+
+            {/* Live Financial Reconciliation Card */}
+            <div className="return-preview-box">
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: 'var(--text-primary)' }}>
+                Deposit Reconciliation Breakdown
+              </div>
+              <div className="return-preview-row">
+                <span className="muted">Security Deposit Held:</span>
+                <span>₹{preview.depHeld.toLocaleString('en-IN')}</span>
+              </div>
+              {preview.latePenalty > 0 && (
+                <div className="return-preview-row">
+                  <span className="muted">Late Penalty ({preview.overdueDays}d @ ₹500/day):</span>
+                  <span style={{ color: '#c9251d' }}>- ₹{preview.latePenalty.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {hasDamage && !preview.isPresumedLost && (
+                <div className="return-preview-row">
+                  <span className="muted">Damage Deduction ({preview.selectedTypeName} Lv.{severity}):</span>
+                  <span style={{ color: '#c9251d' }}>- ₹{preview.damageDeduction.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {preview.isPresumedLost && (
+                <div className="return-preview-row">
+                  <span className="muted">Replacement Charge (Presumed Lost):</span>
+                  <span style={{ color: '#c9251d' }}>- ₹{preview.replacementCharge.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <div className="return-preview-row">
+                <span>Total Deductions:</span>
+                <span style={{ color: '#c9251d' }}>₹{preview.totalDeduction.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="return-preview-row">
+                <span style={{ color: '#107c10' }}>Net Deposit Refund to Customer:</span>
+                <span style={{ color: '#107c10' }}>₹{preview.netRefund.toLocaleString('en-IN')}</span>
+              </div>
+              {preview.balanceOwed > 0 && (
+                <div className="return-preview-row">
+                  <span style={{ color: '#c9251d' }}>Outstanding Customer Balance:</span>
+                  <span style={{ color: '#c9251d' }}>₹{preview.balanceOwed.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+              <button
+                type="submit"
+                className="btn"
+                disabled={processingReturn}
+                style={{ flex: 1 }}
+              >
+                {processingReturn ? 'Processing Settlement…' : `Confirm Return & Refund ₹${preview.netRefund.toLocaleString('en-IN')}`}
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setReturnRental(null)}
+                disabled={processingReturn}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Digital Rental Agreement Modal */}
       <RentalAgreementModal
         isOpen={Boolean(selectedAgreementData)}
         onClose={() => setSelectedAgreementData(null)}

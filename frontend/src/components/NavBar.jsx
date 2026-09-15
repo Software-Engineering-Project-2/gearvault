@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { clearSession } from '../lib/api'
 import { supabase } from '../lib/supabaseClient'
 import SignInPromptModal from './SignInPromptModal'
+import NotificationBell from './NotificationBell'
 
 export default function NavBar({ user, onSignOut }) {
   const location = useLocation()
@@ -57,11 +58,18 @@ export default function NavBar({ user, onSignOut }) {
                   Reservations
                 </Link>
                 <Link
+                  to="/analytics"
+                  className={`nav-link ${isActive('/analytics') ? 'active' : ''}`}
+                >
+                  Analytics
+                </Link>
+                <Link
                   to="/staff"
                   className={`staff-pill-btn ${isActive('/staff') ? 'active' : ''}`}
                 >
-                  <span>⚙️</span> Counter Dispatch
+                  <span>⚙️</span> Dispatch
                 </Link>
+                <NotificationBell />
                 <div className="user-badge-pill">
                   <span className="user-status-dot" />
                   <span>{user.email}</span>

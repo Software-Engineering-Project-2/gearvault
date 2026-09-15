@@ -15,11 +15,19 @@ def create_app(test_config=None):
     app = Flask(__name__)
 
     # Default configuration
-    database_url = (
-        os.getenv("DATABASE_POOLER_URL", "").strip()
-        or os.getenv("DATABASE_URL", "").strip()
+    use_external = (
+        os.getenv("USE_EXTERNAL_DATABASE", "false").strip().lower()
+        in ("true", "1", "yes")
     )
-    # Prefer PostgreSQL from env; keep SQLite only as a last-resort local fallback.
+    database_url = (
+        (
+            os.getenv("DATABASE_POOLER_URL", "").strip()
+            or os.getenv("DATABASE_URL", "").strip()
+        )
+        if use_external
+        else ""
+    )
+    # Prefer PostgreSQL from env if external DB enabled; keep SQLite for seamless local development.
     if database_url:
         normalized_db_url = database_url.replace("postgres://", "postgresql://", 1)
         if (
@@ -53,6 +61,28 @@ def create_app(test_config=None):
     with app.app_context():
         try:
             db.create_all()
+            from app.models import DamageType
+
+            if DamageType.query.count() == 0:
+                defaults = [
+                    DamageType(
+                        name="Cosmetic",
+                        weight=0.05,
+                        description="Surface scratches, scuffs, minor cosmetic wear not affecting functionality.",
+                    ),
+                    DamageType(
+                        name="Functional",
+                        weight=0.20,
+                        description="Partial impairment, broken switch/mount, requires servicing.",
+                    ),
+                    DamageType(
+                        name="Major/Total Loss",
+                        weight=1.00,
+                        description="Complete device failure, shattered sensor/glass, water submersion, or total destruction.",
+                    ),
+                ]
+                db.session.add_all(defaults)
+                db.session.commit()
         except Exception as e:
             app.logger.warning(f"db.create_all() notice: {e}")
 
