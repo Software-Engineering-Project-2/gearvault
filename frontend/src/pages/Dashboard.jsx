@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, getUser } from '../lib/api'
 import { supabase } from '../lib/supabaseClient'
 
 const localInputValue = date => {
@@ -25,6 +25,10 @@ const getItemImageUrl = imagePath => {
 }
 
 export default function Dashboard() {
+  const [user] = useState(getUser())
+  const role = (user?.role || 'customer').toLowerCase()
+  const isStaffOrManager = Boolean(user && (role === 'staff' || role === 'manager'))
+
   const [items, setItems] = useState([])
   const [categories, setCategories] = useState([])
   const [search, setSearch] = useState('')
@@ -201,16 +205,16 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 10, gap: 10, flexWrap: 'wrap' }}>
                     <span className={`badge ${item.available ? 'available' : 'unavailable'}`}>
                       {item.available ? '● Available' : '● In Use'}
                     </span>
                     <Link
                       to={`/items/${item.id}`}
                       state={{ start, end }}
-                      className="btn"
+                      className={`btn ${isStaffOrManager ? 'sm' : ''}`}
                     >
-                      View Details & Book
+                      {isStaffOrManager ? 'View Details' : 'View Details & Book'}
                     </Link>
                   </div>
                 </article>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api } from '../lib/api'
+import { api, getUser } from '../lib/api'
 import RentalAgreementModal from '../components/RentalAgreementModal'
 
 const formatTime = value => {
@@ -221,6 +221,21 @@ export default function StaffQueue() {
 
   const preview = calculateReturnPreview()
 
+  const now = new Date()
+
+  // Partition rentals into on-time active field rentals vs overdue/disputed
+  const onTimeRentals = activeRentals.filter(r => {
+    const isOverdue = r.due_at && new Date(r.due_at) < now
+    const isDisputed = (r.status || '').toLowerCase() === 'disputed'
+    return !isOverdue && !isDisputed
+  })
+
+  const overdueRentals = activeRentals.filter(r => {
+    const isOverdue = r.due_at && new Date(r.due_at) < now
+    const isDisputed = (r.status || '').toLowerCase() === 'disputed'
+    return isOverdue && !isDisputed
+  })
+
   // Filter lists based on search
   const filteredBookings = confirmedBookings.filter(b => {
     const q = search.toLowerCase()
@@ -231,7 +246,16 @@ export default function StaffQueue() {
     )
   })
 
-  const filteredRentals = activeRentals.filter(r => {
+  const filteredOnTimeRentals = onTimeRentals.filter(r => {
+    const q = search.toLowerCase()
+    return (
+      r.item?.name?.toLowerCase().includes(q) ||
+      r.item?.sku?.toLowerCase().includes(q) ||
+      String(r.id).includes(q)
+    )
+  })
+
+  const filteredOverdueRentals = overdueRentals.filter(r => {
     const q = search.toLowerCase()
     return (
       r.item?.name?.toLowerCase().includes(q) ||
@@ -257,7 +281,7 @@ export default function StaffQueue() {
           <div>
             <h2>Counter Dispatch & Operations</h2>
             <p className="muted" style={{ margin: '4px 0 0' }}>
-              Manage counter collection handovers, check in returned equipment with damage assessment, and oversee customer disputes.
+              Manage counter collection handovers, check in returned equipment with damage assessment, and oversee customer disputes and overdue rentals.
             </p>
           </div>
           <button className="btn secondary sm" onClick={loadData} disabled={loading}>
@@ -270,7 +294,7 @@ export default function StaffQueue() {
       </div>
 
       {/* Segmented Control Tabs */}
-      <div className="payment-tabs" style={{ margin: '0 0 16px', maxWidth: 640 }}>
+      <div className="payment-tabs" style={{ margin: '0 0 16px', maxWidth: 660 }}>
         <button
           className={`tab-btn ${activeTab === 'confirmed' ? 'active' : ''}`}
           onClick={() => setActiveTab('confirmed')}
@@ -281,13 +305,13 @@ export default function StaffQueue() {
           className={`tab-btn ${activeTab === 'active_rentals' ? 'active' : ''}`}
           onClick={() => setActiveTab('active_rentals')}
         >
-          🚚 Active Field Rentals ({activeRentals.length})
+          🚚 Active Field Rentals ({onTimeRentals.length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'disputes' ? 'active' : ''}`}
           onClick={() => setActiveTab('disputes')}
         >
-          ⚖️ Disputes & Overrides ({disputes.length})
+          ⚠️ Disputes & Overdues ({disputes.length + overdueRentals.length})
         </button>
       </div>
 
@@ -301,8 +325,8 @@ export default function StaffQueue() {
             activeTab === 'confirmed'
               ? 'collection queue'
               : activeTab === 'active_rentals'
-              ? 'active rentals'
-              : 'customer disputes'
+              ? 'active on-time rentals'
+              : 'disputes and overdue rentals'
           } by equipment, SKU, or ID...`}
         />
       </div>
@@ -358,102 +382,214 @@ export default function StaffQueue() {
         </div>
       )}
 
-      {/* 2. Active Rentals Tab */}
+      {/* 2. Active Rentals Tab (On-Time Rentals Only) */}
       {activeTab === 'active_rentals' && (
         <div className="card">
           <div className="card-header">
             <div>
-              <h3>Active Field Rentals</h3>
+              <h3>Active Field Rentals ({onTimeRentals.length})</h3>
               <p className="muted small" style={{ margin: '2px 0 0' }}>
-                All equipment currently in active client possession. Select an item to process check-in and damage evaluation.
+                On-time equipment currently in active client possession. (Overdue items and contested returns are moved to Disputes & Overdues).
               </p>
             </div>
           </div>
 
           {loading ? (
             <div className="empty">Loading active rentals…</div>
-          ) : filteredRentals.length === 0 ? (
-            <div className="empty">No equipment currently deployed in the field.</div>
+          ) : filteredOnTimeRentals.length === 0 ? (
+            <div className="empty">No on-time equipment currently deployed in the field.</div>
           ) : (
-            filteredRentals.map(r => {
-              const isOverdue = new Date(r.due_at) < new Date()
-              return (
-                <div key={r.id} className="booking-item">
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: 16 }}>{r.item?.name || `Item #${r.item_id}`}</strong>
-                      {r.item?.sku && <span className="badge">{r.item.sku}</span>}
-                      <span className={`badge ${isOverdue ? 'unavailable' : 'available'}`}>
-                        {isOverdue ? '⚠️ Overdue' : '● Active'}
-                      </span>
-                    </div>
-                    <div className="meta" style={{ marginTop: 4 }}>
-                      Dispatched: {formatTime(r.checkout_at)} → Due: {formatTime(r.due_at)}
-                    </div>
-                    <div className="small muted" style={{ marginTop: 4 }}>
-                      Rental #{r.id} • {r.total_price ? `Fee: ₹${r.total_price.toLocaleString('en-IN')} • ` : ''}Deposit Held: ₹{r.deposit_held?.toLocaleString('en-IN') || 0}
-                    </div>
+            filteredOnTimeRentals.map(r => (
+              <div key={r.id} className="booking-item">
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: 16 }}>{r.item?.name || `Item #${r.item_id}`}</strong>
+                    {r.item?.sku && <span className="badge">{r.item.sku}</span>}
+                    <span className="badge available">● Active (On Schedule)</span>
                   </div>
-
-                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        className="btn sm"
-                        onClick={() => {
-                          setReturnRental(r)
-                          setHasDamage(false)
-                          setSeverity(1)
-                          setReturnNotes('')
-                          setReturnPhotoUrl('')
-                          setForcePresumedLost(false)
-                          setMessage('')
-                          setError('')
-                        }}
-                      >
-                        📥 Process Return
-                      </button>
-                      <button
-                        className="btn secondary sm"
-                        onClick={() => setSelectedAgreementData({
-                          rentalId: r.id,
-                          bookingId: r.booking_id,
-                          item: r.item,
-                          startTs: r.checkout_at,
-                          endTs: r.due_at,
-                          checkoutAt: r.checkout_at,
-                          pricing: {
-                            rental_price: r.total_price,
-                            depreciated_value: r.item?.depreciated_value,
-                            duration_tier: 'Daily Tier',
-                            duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
-                          },
-                          depositAmount: r.deposit_held,
-                          conditionNotes: 'Verified during counter collection inspection.',
-                          customer: { id: r.customer_id },
-                        })}
-                      >
-                        📄 Agreement
-                      </button>
-                    </div>
+                  <div className="meta" style={{ marginTop: 4 }}>
+                    Dispatched: {formatTime(r.checkout_at)} → Due: {formatTime(r.due_at)}
+                  </div>
+                  <div className="small muted" style={{ marginTop: 4 }}>
+                    Rental #{r.id} • {r.total_price ? `Fee: ₹${r.total_price.toLocaleString('en-IN')} • ` : ''}Deposit Held: ₹{r.deposit_held?.toLocaleString('en-IN') || 0}
                   </div>
                 </div>
-              )
-            })
+
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn sm"
+                      onClick={() => {
+                        setReturnRental(r)
+                        setHasDamage(false)
+                        setSeverity(1)
+                        setReturnNotes('')
+                        setReturnPhotoUrl('')
+                        setForcePresumedLost(false)
+                        setMessage('')
+                        setError('')
+                      }}
+                    >
+                      📥 Process Return
+                    </button>
+                    <button
+                      className="btn secondary sm"
+                      onClick={() => setSelectedAgreementData({
+                        rentalId: r.id,
+                        bookingId: r.booking_id,
+                        item: r.item,
+                        startTs: r.checkout_at,
+                        endTs: r.due_at,
+                        checkoutAt: r.checkout_at,
+                        pricing: {
+                          rental_price: r.total_price,
+                          depreciated_value: r.item?.depreciated_value,
+                          duration_tier: 'Daily Tier',
+                          duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
+                        },
+                        depositAmount: r.deposit_held,
+                        conditionNotes: 'Verified during counter collection inspection.',
+                        customer: { id: r.customer_id },
+                      })}
+                    >
+                      📄 Agreement
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
           )}
         </div>
       )}
 
-      {/* 3. Disputes & Overrides Tab (FR019, FR020, BR3) */}
+      {/* 3. Disputes & Overdues Tab */}
       {activeTab === 'disputes' && (
         <div className="card">
           <div className="card-header">
             <div>
-              <h3>Contested Damage Assessments & Manager Overrides</h3>
+              <h3>Disputes & Overdue Rentals</h3>
               <p className="muted small" style={{ margin: '2px 0 0' }}>
-                Under Business Rule BR3, only managers can directly finalize or override disputed deductions.
+                Track overdue equipment accumulating late fees, check in late returns, and manage customer contested damage assessments.
               </p>
             </div>
           </div>
+
+          {/* Section A: Overdue Field Rentals */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <h4 style={{ margin: 0, fontSize: 16, color: '#b45309' }}>
+                ⏰ Overdue Field Rentals ({overdueRentals.length})
+              </h4>
+              <span className="badge held" style={{ fontSize: 11 }}>
+                Incurring ₹500/day Late Penalty
+              </span>
+            </div>
+
+            {filteredOverdueRentals.length === 0 ? (
+              <div className="empty" style={{ margin: '8px 0 20px', padding: '14px', background: '#f8fafc', borderRadius: 8 }}>
+                No equipment is currently overdue. All active rentals are on schedule.
+              </div>
+            ) : (
+              filteredOverdueRentals.map(r => {
+                const dueAt = new Date(r.due_at)
+                const overdueSeconds = Math.max(0, (now - dueAt) / 1000)
+                const overdueDays = overdueSeconds > 60 ? Math.max(1, Math.ceil((overdueSeconds - 60) / 86400)) : 0
+                const latePenalty = overdueDays * 500
+
+                return (
+                  <div
+                    key={r.id}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #fecaca',
+                      borderLeft: '5px solid #dc2626',
+                      borderRadius: '10px',
+                      padding: '16px 20px',
+                      marginBottom: '14px',
+                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '16px',
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: 16 }}>{r.item?.name || `Item #${r.item_id}`}</strong>
+                        {r.item?.sku && <span className="badge">{r.item.sku}</span>}
+                        <span className="badge unavailable">
+                          ⚠️ {overdueDays} Day{overdueDays === 1 ? '' : 's'} Overdue
+                        </span>
+                      </div>
+                      <div className="meta" style={{ marginTop: 4 }}>
+                        Dispatched: {formatTime(r.checkout_at)} → <strong style={{ color: '#dc2626' }}>Scheduled Due: {formatTime(r.due_at)}</strong>
+                      </div>
+                      <div className="small" style={{ marginTop: 4, color: '#991b1b', fontWeight: 500 }}>
+                        Accrued Late Penalty: ₹{latePenalty.toLocaleString('en-IN')} (₹500/day for {overdueDays}d) • Deposit Held: ₹{r.deposit_held?.toLocaleString('en-IN') || 0}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn sm"
+                          style={{ background: '#b91c1c', borderColor: '#b91c1c', color: '#fff' }}
+                          onClick={() => {
+                            setReturnRental(r)
+                            setHasDamage(false)
+                            setSeverity(1)
+                            setReturnNotes(`Late return processed. Incurred ${overdueDays} days overdue fee.`)
+                            setReturnPhotoUrl('')
+                            setForcePresumedLost(false)
+                            setMessage('')
+                            setError('')
+                          }}
+                        >
+                          📥 Check-in & Assess Penalty
+                        </button>
+                        <button
+                          className="btn secondary sm"
+                          onClick={() => setSelectedAgreementData({
+                            rentalId: r.id,
+                            bookingId: r.booking_id,
+                            item: r.item,
+                            startTs: r.checkout_at,
+                            endTs: r.due_at,
+                            checkoutAt: r.checkout_at,
+                            pricing: {
+                              rental_price: r.total_price,
+                              depreciated_value: r.item?.depreciated_value,
+                              duration_tier: 'Daily Tier',
+                              duration_days: Math.max(1, Math.ceil((new Date(r.due_at) - new Date(r.checkout_at)) / 86400000)),
+                            },
+                            depositAmount: r.deposit_held,
+                            conditionNotes: 'Verified during counter collection inspection.',
+                            customer: { id: r.customer_id },
+                          })}
+                        >
+                          📄 Agreement
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <hr style={{ margin: '24px 0', borderColor: 'var(--card-border)' }} />
+
+          {/* Section B: Contested Damage Assessments & Manager Overrides */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <h4 style={{ margin: 0, fontSize: 16 }}>
+                ⚖️ Contested Damage Assessments ({disputes.length})
+              </h4>
+              <span className="badge disputed" style={{ fontSize: 11 }}>
+                Manager Review Required (BR3)
+              </span>
+            </div>
 
           {loading ? (
             <div className="empty">Loading customer disputes…</div>
@@ -506,65 +642,75 @@ export default function StaffQueue() {
                   </div>
                 </div>
 
-                {/* Manager override action */}
-                {overrideAssessmentId === d.id ? (
-                  <form onSubmit={(e) => handleOverrideSubmit(e, d.id)} style={{ marginTop: 14, background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #cbd5e1' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--accent)' }}>
-                      Manager Direct Override Form (BR3)
-                    </div>
-                    <div className="form-row">
-                      <label>Revised Damage Deduction (₹)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={overrideAmount}
-                        onChange={e => setOverrideAmount(e.target.value)}
-                        placeholder="Enter adjusted deduction amount (e.g. 2000)"
-                        required
-                      />
-                    </div>
-                    <div className="form-row">
-                      <label>Manager Resolution Notes</label>
-                      <textarea
-                        rows={2}
-                        value={overrideNotes}
-                        onChange={e => setOverrideNotes(e.target.value)}
-                        placeholder="State business rationale for this deduction override..."
-                        required
-                      />
-                    </div>
-                    <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                      <button type="submit" className="btn sm" disabled={processingOverride}>
-                        {processingOverride ? 'Settling…' : 'Confirm Override & Close Rental'}
-                      </button>
+                {/* Manager override action: strictly restricted to Manager role */}
+                {getUser()?.role?.toLowerCase() === 'manager' ? (
+                  overrideAssessmentId === d.id ? (
+                    <form onSubmit={(e) => handleOverrideSubmit(e, d.id)} style={{ marginTop: 14, background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #cbd5e1' }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--accent)' }}>
+                        Manager Direct Override Form (BR3)
+                      </div>
+                      <div className="form-row">
+                        <label>Revised Damage Deduction (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={overrideAmount}
+                          onChange={e => setOverrideAmount(e.target.value)}
+                          placeholder="Enter adjusted deduction amount (e.g. 2000)"
+                          required
+                        />
+                      </div>
+                      <div className="form-row">
+                        <label>Manager Resolution Notes</label>
+                        <textarea
+                          rows={2}
+                          value={overrideNotes}
+                          onChange={e => setOverrideNotes(e.target.value)}
+                          placeholder="State business rationale for this deduction override..."
+                          required
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                        <button type="submit" className="btn sm" disabled={processingOverride}>
+                          {processingOverride ? 'Settling…' : 'Confirm Override & Close Rental'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn secondary sm"
+                          onClick={() => setOverrideAssessmentId(null)}
+                          disabled={processingOverride}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div style={{ textAlign: 'right', marginTop: 12 }}>
                       <button
-                        type="button"
                         className="btn secondary sm"
-                        onClick={() => setOverrideAssessmentId(null)}
-                        disabled={processingOverride}
+                        onClick={() => {
+                          setOverrideAssessmentId(d.id)
+                          setOverrideAmount(d.damage_deduction)
+                          setOverrideNotes('')
+                        }}
                       >
-                        Cancel
+                        ⚖️ Override Deduction
                       </button>
                     </div>
-                  </form>
+                  )
                 ) : (
                   <div style={{ textAlign: 'right', marginTop: 12 }}>
-                    <button
-                      className="btn secondary sm"
-                      onClick={() => {
-                        setOverrideAssessmentId(d.id)
-                        setOverrideAmount(d.damage_deduction)
-                        setOverrideNotes('')
-                      }}
-                    >
-                      ⚖️ Override Deduction
-                    </button>
+                    <span className="muted small" style={{ fontStyle: 'italic', background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px' }}>
+                      🔒 Manager authorization required to apply deduction override.
+                    </span>
                   </div>
                 )}
+
               </div>
             ))
           )}
+          </div>
         </div>
       )}
 

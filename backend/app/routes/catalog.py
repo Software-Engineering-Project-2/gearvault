@@ -52,47 +52,13 @@ BOOKING_STATUS_CANCELLED = "Cancelled"
 BOOKING_STATUS_EXPIRED = "Expired"
 
 
-def customer_required(view):
-    """Validate a JWT token (Flask-JWT or Supabase session) and expose user ID to routes."""
-
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        if not token:
-            return jsonify({"error": "An authentication session token is required"}), 401
-
-        authenticated = False
-
-        # 1. Try decoding local Flask-JWT token first
-        try:
-            decoded = decode_token(token)
-            g.customer_id = str(decoded.get("sub"))
-            authenticated = True
-        except Exception:
-            pass
-
-        # 2. Fall back to Supabase auth verification
-        if not authenticated:
-            supabase_url = os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("SUPABASE_ANON_KEY")
-            if supabase_url and supabase_key:
-                try:
-                    auth_request = Request(
-                        f"{supabase_url.rstrip('/')}/auth/v1/user",
-                        headers={"apikey": supabase_key, "Authorization": f"Bearer {token}"},
-                    )
-                    with urlopen(auth_request, timeout=5) as response:
-                        g.customer_id = json.loads(response.read().decode("utf-8"))["id"]
-                    authenticated = True
-                except Exception:
-                    pass
-
-        if not authenticated:
-            return jsonify({"error": "Your session is invalid or has expired"}), 401
-
-        return view(*args, **kwargs)
-
-    return wrapped
+from app.rbac import (
+    customer_required,
+    staff_required,
+    manager_required,
+    jwt_required_custom,
+    roles_required,
+)
 
 
 def utcnow():
@@ -261,7 +227,7 @@ def get_item(item_id):
 
 
 @catalog_bp.post("/bookings/hold")
-@customer_required
+@roles_required("customer")
 def create_hold():
     expire_holds()
     data = request.get_json() or {}
@@ -310,12 +276,14 @@ def create_hold():
 
 
 @catalog_bp.post("/bookings/<int:booking_id>/confirm-payment")
-@customer_required
+@roles_required("customer")
 def confirm_payment(booking_id):
     expire_holds()
-    booking = Booking.query.filter_by(id=booking_id, customer_id=g.customer_id).first()
+    booking = db.session.get(Booking, booking_id)
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
+    if str(booking.customer_id) != str(g.customer_id) and getattr(g, "user_role", "") != "manager":
+        return jsonify({"error": "You do not have permission to access this booking"}), 403
     if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify({"error": "Only an active hold can be confirmed"}), 409
     
@@ -349,9 +317,11 @@ def confirm_payment(booking_id):
 @customer_required
 def cancel_hold(booking_id):
     expire_holds()
-    booking = Booking.query.filter_by(id=booking_id, customer_id=g.customer_id).first()
+    booking = db.session.get(Booking, booking_id)
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
+    if str(booking.customer_id) != str(g.customer_id) and getattr(g, "user_role", "") != "manager":
+        return jsonify({"error": "You do not have permission to access this booking"}), 403
     if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify(
             {"error": "Only a soft hold may be cancelled before checkout"}
@@ -362,7 +332,7 @@ def cancel_hold(booking_id):
 
 
 @catalog_bp.get("/bookings/mine")
-@customer_required
+@jwt_required_custom
 def my_bookings():
     expire_holds()
     bookings = Booking.query.filter_by(customer_id=g.customer_id).order_by(
@@ -372,7 +342,7 @@ def my_bookings():
 
 
 @catalog_bp.get("/rentals/mine")
-@customer_required
+@jwt_required_custom
 def my_rentals():
     rentals = Rental.query.filter_by(customer_id=g.customer_id).order_by(
         Rental.created_at.desc()
@@ -381,12 +351,15 @@ def my_rentals():
 
 
 @catalog_bp.get("/bookings/<int:booking_id>")
-@customer_required
+@jwt_required_custom
 def get_booking(booking_id):
     expire_holds()
-    booking = Booking.query.filter_by(id=booking_id, customer_id=g.customer_id).first()
+    booking = db.session.get(Booking, booking_id)
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
+    # Customers can only view their own bookings; Staff and Manager can view any booking for operational pickup/audit
+    if getattr(g, "user_role", "") == "customer" and str(booking.customer_id) != str(g.customer_id):
+        return jsonify({"error": "You do not have permission to access this booking"}), 403
     return jsonify({"booking": booking.to_dict()})
 
 
@@ -395,7 +368,7 @@ def get_booking(booking_id):
 # ==========================================
 
 @catalog_bp.get("/staff/bookings/confirmed")
-@customer_required
+@staff_required
 def staff_confirmed_bookings():
     expire_holds()
     # Returns all confirmed bookings ready for equipment pickup
@@ -406,7 +379,7 @@ def staff_confirmed_bookings():
 
 
 @catalog_bp.get("/staff/rentals/active")
-@customer_required
+@staff_required
 def staff_active_rentals():
     # Returns all active rentals currently checked out to customers
     rentals = Rental.query.filter(
@@ -416,7 +389,7 @@ def staff_active_rentals():
 
 
 @catalog_bp.post("/staff/bookings/<int:booking_id>/handover")
-@customer_required
+@staff_required
 def staff_process_handover(booking_id):
     expire_holds()
     booking = Booking.query.filter_by(id=booking_id).first()
@@ -424,6 +397,7 @@ def staff_process_handover(booking_id):
         return jsonify({"error": "Booking not found"}), 404
     if (booking.status or "").lower() != BOOKING_STATUS_CONFIRMED.lower():
         return jsonify({"error": "Only confirmed bookings can be handed over"}), 400
+
 
     data = request.get_json() or {}
     condition_notes = data.get("notes", "").strip()
@@ -571,7 +545,7 @@ def estimate_damage_deduction():
 
 
 @catalog_bp.post("/staff/rentals/<int:rental_id>/return")
-@customer_required
+@staff_required
 def staff_process_return(rental_id):
     """
     Processes counter return for an active rental:
@@ -702,6 +676,10 @@ def submit_damage_dispute(rental_id):
     if not rental:
         return jsonify({"error": "Rental not found"}), 404
 
+    # Ownership check: customers can only dispute their own rentals
+    if str(rental.customer_id) != str(g.customer_id) and getattr(g, "user_role", "") != "manager":
+        return jsonify({"error": "You do not have permission to dispute this rental"}), 403
+
     assessment = DamageAssessment.query.filter_by(rental_id=rental.id).first()
     if not assessment:
         return jsonify({"error": "No damage assessment exists for this rental"}), 404
@@ -729,10 +707,10 @@ def submit_damage_dispute(rental_id):
 
 
 @catalog_bp.get("/staff/disputes")
-@customer_required
+@staff_required
 def list_disputes():
     """
-    Returns all assessments currently flagged as 'disputed' for Manager review.
+    Returns all assessments currently flagged as 'disputed' for Staff / Manager review.
     """
     assessments = DamageAssessment.query.filter_by(status="disputed").order_by(DamageAssessment.disputed_at.desc()).all()
     results = []
@@ -745,8 +723,9 @@ def list_disputes():
 
 
 @catalog_bp.post("/manager/disputes/<int:assessment_id>/override")
-@customer_required
+@manager_required
 def manager_override_dispute(assessment_id):
+
     """
     FR020 & BR3: Only a manager can override or finalize a disputed deduction without
     an intermediate formal review state.
@@ -816,7 +795,7 @@ def manager_override_dispute(assessment_id):
 # =========================================================
 
 @catalog_bp.get("/notifications")
-@customer_required
+@jwt_required_custom
 def get_notifications():
     """
     FR024, FR025, FR026: Fetches recent in-app notifications and unread count for user.
@@ -837,19 +816,21 @@ def get_notifications():
 
 
 @catalog_bp.post("/notifications/<int:notif_id>/read")
-@customer_required
+@jwt_required_custom
 def mark_notification_read(notif_id):
     """Marks an individual notification as read."""
-    notif = Notification.query.filter_by(id=notif_id, user_id=g.customer_id).first()
+    notif = db.session.get(Notification, notif_id)
     if not notif:
         return jsonify({"error": "Notification not found"}), 404
+    if str(notif.user_id) != str(g.customer_id):
+        return jsonify({"error": "You do not have permission to access this notification"}), 403
     notif.read = True
     db.session.commit()
     return jsonify({"message": "Marked as read", "notification": notif.to_dict()})
 
 
 @catalog_bp.post("/notifications/read-all")
-@customer_required
+@jwt_required_custom
 def mark_all_notifications_read():
     """Marks all notifications for current user as read."""
     Notification.query.filter_by(user_id=g.customer_id, read=False).update(
@@ -860,7 +841,7 @@ def mark_all_notifications_read():
 
 
 @catalog_bp.get("/manager/analytics")
-@customer_required
+@manager_required
 def manager_analytics():
     """
     FR027: Aggregates manager dashboard metrics displaying revenue,
@@ -967,7 +948,7 @@ def manager_analytics():
 
 
 @catalog_bp.get("/manager/reports/monthly-csv")
-@customer_required
+@manager_required
 def manager_export_monthly_csv():
     """
     FR027: Export monthly rental and financial report in CSV format.

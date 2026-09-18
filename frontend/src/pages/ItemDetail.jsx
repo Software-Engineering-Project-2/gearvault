@@ -44,6 +44,8 @@ export default function ItemDetail() {
   const location = useLocation()
 
   const [user] = useState(getUser())
+  const role = (user?.role || 'customer').toLowerCase()
+  const isStaffOrManager = Boolean(user && (role === 'staff' || role === 'manager'))
   const [item, setItem] = useState(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -284,25 +286,36 @@ export default function ItemDetail() {
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button
-                className="btn"
-                style={{ width: '100%', padding: '12px 20px', fontSize: 14.5, fontWeight: 600 }}
-                disabled={!item.available || !isWindowValid || loading}
-                onClick={() => handleBooking('checkout')}
-              >
-                Book & Checkout Directly
-              </button>
-              
-              <button
-                className="btn secondary"
-                style={{ width: '100%', padding: '12px 20px', fontSize: 14.5, fontWeight: 500 }}
-                disabled={!item.available || !isWindowValid || loading}
-                onClick={() => handleBooking('reserve')}
-              >
-                Reserve (Place 15-Min Hold)
-              </button>
-            </div>
+            {isStaffOrManager ? (
+              <div className="notice" style={{ textAlign: 'center', padding: '14px 16px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  Staff / Manager View Only
+                </div>
+                <div className="small muted">
+                  Equipment specifications and cost inspection only. Booking is reserved for customers.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  className="btn"
+                  style={{ width: '100%', padding: '12px 20px', fontSize: 14.5, fontWeight: 600 }}
+                  disabled={!item.available || !isWindowValid || loading}
+                  onClick={() => handleBooking('checkout')}
+                >
+                  Book & Checkout Directly
+                </button>
+                
+                <button
+                  className="btn secondary"
+                  style={{ width: '100%', padding: '12px 20px', fontSize: 14.5, fontWeight: 500 }}
+                  disabled={!item.available || !isWindowValid || loading}
+                  onClick={() => handleBooking('reserve')}
+                >
+                  Reserve (Place 15-Min Hold)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

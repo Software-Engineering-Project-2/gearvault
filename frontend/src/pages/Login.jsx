@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { setSession } from '../lib/api'
+import { api, setSession } from '../lib/api'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Login({ onAuthenticated }) {
@@ -15,13 +15,42 @@ export default function Login({ onAuthenticated }) {
     setError(null)
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      setSession(data.session.access_token, data.user)
-      onAuthenticated(data.user)
+      // 1. Try Flask backend authentication first
+      try {
+        const res = await api('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        })
+        if (res && res.access_token) {
+          setSession(res.access_token, res.user)
+          onAuthenticated(res.user)
+          navigate('/dashboard')
+          return
+        }
+      } catch (backendErr) {
+        // If it's a server connection error or failure other than 401, check Supabase
+      }
+
+      // 2. Fall back to Supabase auth for legacy sessions
+      const { data, error: supaError } = await supabase.auth.signInWithPassword({ email, password })
+      if (supaError) throw supaError
+
+      let userObj = data.user
+      try {
+        const meRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/me`, {
+          headers: { Authorization: `Bearer ${data.session.access_token}` }
+        })
+        if (meRes.ok) {
+          const meData = await meRes.json()
+          userObj = { ...data.user, ...meData.user }
+        }
+      } catch (_) {}
+
+      setSession(data.session.access_token, userObj)
+      onAuthenticated(userObj)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.message || 'Login error')
+      setError(err.message || 'Invalid email or password')
     } finally {
       setLoading(false)
     }

@@ -61,7 +61,41 @@ def create_app(test_config=None):
     with app.app_context():
         try:
             db.create_all()
-            from app.models import DamageType
+            from app.models import DamageType, Role, User
+
+            # Ensure canonical roles exist
+            role_definitions = [
+                (1, "customer"),
+                (2, "staff"),
+                (3, "manager"),
+            ]
+            for r_id, r_name in role_definitions:
+                existing_role = db.session.get(Role, r_id) or Role.query.filter_by(name=r_name).first()
+                if not existing_role:
+                    db.session.add(Role(id=r_id, name=r_name))
+            db.session.commit()
+
+            # Ensure development users exist for manual RBAC testing
+            from app.routes.auth import sync_user_to_supabase
+            dev_password = os.getenv("DEV_USERS_PASSWORD", "DevPassword123!")
+            dev_users = [
+                ("customer@test.com", "Customer Test User", 1),
+                ("staff@test.com", "Staff Test User", 2),
+                ("manager@test.com", "Manager Test User", 3),
+            ]
+            for email, full_name, role_id in dev_users:
+                user = User.query.filter_by(email=email).first()
+                if not user:
+                    user = User(email=email, full_name=full_name, role_id=role_id)
+                    user.set_password(dev_password)
+                    db.session.add(user)
+                else:
+                    # Maintain correct role assignment
+                    user.role_id = role_id
+                    user.set_password(dev_password)
+                # Ensure user exists in Supabase auth.users & profiles for booking integrity
+                sync_user_to_supabase(email, dev_password, full_name, role_id)
+            db.session.commit()
 
             if DamageType.query.count() == 0:
                 defaults = [
@@ -84,7 +118,7 @@ def create_app(test_config=None):
                 db.session.add_all(defaults)
                 db.session.commit()
         except Exception as e:
-            app.logger.warning(f"db.create_all() notice: {e}")
+            app.logger.warning(f"Database bootstrap notice: {e}")
 
 
     # Expire holds even when no customer is currently browsing the catalog.

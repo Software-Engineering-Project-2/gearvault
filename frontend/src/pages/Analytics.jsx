@@ -3,20 +3,60 @@ import { api, getToken } from '../lib/api'
 
 export default function Analytics() {
   const [data, setData] = useState(null)
+  const [disputes, setDisputes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
   const [exporting, setExporting] = useState(false)
+
+  // Manager Override state (BR3)
+  const [overrideAssessmentId, setOverrideAssessmentId] = useState(null)
+  const [overrideAmount, setOverrideAmount] = useState('')
+  const [overrideNotes, setOverrideNotes] = useState('')
+  const [processingOverride, setProcessingOverride] = useState(false)
 
   const loadAnalytics = async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await api('/manager/analytics')
+      const [res, dRes] = await Promise.all([
+        api('/manager/analytics'),
+        api('/staff/disputes').catch(() => ({ disputes: [] }))
+      ])
       setData(res)
+      setDisputes(dRes.disputes || [])
     } catch (err) {
       setError(err.message || 'Failed to load manager analytics')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleOverrideSubmit = async (e, assessmentId) => {
+    e.preventDefault()
+    if (!assessmentId) return
+    setProcessingOverride(true)
+    setError('')
+    setActionMessage('')
+
+    try {
+      const res = await api(`/manager/disputes/${assessmentId}/override`, {
+        method: 'POST',
+        body: JSON.stringify({
+          override_amount: Number(overrideAmount),
+          manager_notes: overrideNotes || 'Manager direct override applied.',
+        })
+      })
+
+      setActionMessage(res.message || 'Dispute successfully resolved and settlement updated.')
+      setOverrideAssessmentId(null)
+      setOverrideAmount('')
+      setOverrideNotes('')
+      loadAnalytics()
+    } catch (err) {
+      setError(err.message || 'Failed to apply manager override.')
+    } finally {
+      setProcessingOverride(false)
     }
   }
 
@@ -77,6 +117,7 @@ export default function Analytics() {
         </div>
 
         {error && <div className="notice error" style={{ marginTop: 14 }}>{error}</div>}
+        {actionMessage && <div className="notice success" style={{ marginTop: 14 }}>{actionMessage}</div>}
       </div>
 
       {loading ? (
@@ -124,6 +165,140 @@ export default function Analytics() {
                 Refunds Released: ₹{summary.total_refunds_issued?.toLocaleString('en-IN') || 0}
               </div>
             </div>
+          </div>
+
+          {/* Customer Damage Assessment Disputes (BR3) */}
+          <div className="card" style={{ marginTop: 24, border: disputes.length > 0 ? '1px solid #f59e0b' : '1px solid var(--card-border)' }}>
+            <div className="card-header">
+              <div>
+                <h3>⚖️ Customer Damage Disputes & Overrides (BR3)</h3>
+                <p className="muted small" style={{ margin: '2px 0 0' }}>
+                  Under Business Rule BR3, only Managers can review and directly override contested damage deductions without intermediate reviews.
+                </p>
+              </div>
+              <span className={`badge ${disputes.length > 0 ? 'disputed' : 'available'}`}>
+                {disputes.length > 0 ? `⚠️ ${disputes.length} Contested` : '✓ 0 Pending'}
+              </span>
+            </div>
+
+            {disputes.length === 0 ? (
+              <div className="empty" style={{ padding: '24px 16px' }}>
+                ✓ No customer damage assessment disputes are currently pending review. All return assessments are finalized.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
+                {disputes.map(d => (
+                  <div key={d.id} className="dispute-card" style={{ margin: 0, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: 17 }}>
+                          {d.rental?.item?.name || 'Equipment Rental'}
+                        </h4>
+                        <p className="small muted" style={{ margin: '2px 0 6px' }}>
+                          Rental #{d.rental_id} • Disputed on {new Date(d.disputed_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <span className="badge disputed">⚠️ Customer Disputed</span>
+                    </div>
+
+                    {/* Customer Dispute statement */}
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 14px', margin: '12px 0' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>
+                        CUSTOMER DISPUTE STATEMENT:
+                      </div>
+                      <div style={{ fontSize: 14.5, color: '#78350f', fontStyle: 'italic' }}>
+                        "{d.dispute_reason}"
+                      </div>
+                    </div>
+
+                    {/* Assessment Meta Box */}
+                    <div className="meta-box" style={{ margin: '12px 0' }}>
+                      <div className="meta-row">
+                        <span className="muted">Damage Classification:</span>
+                        <strong>{d.damage_type?.name || 'Assessed Damage'} (Severity Level {d.severity}/5)</strong>
+                      </div>
+                      <div className="meta-row">
+                        <span className="muted">Assessed Damage Deduction:</span>
+                        <strong style={{ color: '#c9251d' }}>₹{d.damage_deduction?.toLocaleString('en-IN')}</strong>
+                      </div>
+                      {d.late_penalty > 0 && (
+                        <div className="meta-row">
+                          <span className="muted">Late Return Fee:</span>
+                          <strong>₹{d.late_penalty?.toLocaleString('en-IN')}</strong>
+                        </div>
+                      )}
+                      <div className="meta-row">
+                        <span className="muted">Initial Deposit Refund:</span>
+                        <strong>₹{d.deposit_refunded?.toLocaleString('en-IN')}</strong>
+                      </div>
+                    </div>
+
+                    {/* Manager Override Form */}
+                    {overrideAssessmentId === d.id ? (
+                      <form onSubmit={(e) => handleOverrideSubmit(e, d.id)} style={{ marginTop: 14, background: '#f8fafc', padding: 16, borderRadius: 10, border: '1px solid #cbd5e1' }}>
+                        <div style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 10, color: 'var(--accent)' }}>
+                          Manager Direct Override Form (BR3)
+                        </div>
+                        <div className="form-row">
+                          <label>Revised Damage Deduction (₹)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={overrideAmount}
+                            onChange={e => setOverrideAmount(e.target.value)}
+                            placeholder="Enter revised deduction amount (e.g. 500)"
+                            required
+                          />
+                          <p className="muted small" style={{ margin: '4px 0 0' }}>
+                            Adjust deduction to an acceptable amount or set to 0 to fully waive liability.
+                          </p>
+                        </div>
+                        <div className="form-row" style={{ marginTop: 10 }}>
+                          <label>Manager Resolution Notes</label>
+                          <input
+                            type="text"
+                            value={overrideNotes}
+                            onChange={e => setOverrideNotes(e.target.value)}
+                            placeholder="Reason for adjustment (e.g. Pre-existing wear verified, partial waiver granted)..."
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                          <button type="submit" className="btn sm" disabled={processingOverride}>
+                            {processingOverride ? 'Applying Override…' : '⚖️ Confirm Manager Override'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn secondary sm"
+                            onClick={() => {
+                              setOverrideAssessmentId(null)
+                              setOverrideAmount('')
+                              setOverrideNotes('')
+                            }}
+                            disabled={processingOverride}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div style={{ textAlign: 'right', marginTop: 12 }}>
+                        <button
+                          className="btn sm"
+                          onClick={() => {
+                            setOverrideAssessmentId(d.id)
+                            setOverrideAmount(d.damage_deduction ?? '')
+                            setOverrideNotes('')
+                          }}
+                        >
+                          ⚖️ Override Deduction & Settle Dispute
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Grid of Tables: Most Rented & Damage Trends */}

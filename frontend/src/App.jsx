@@ -27,10 +27,10 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/items/:itemId" element={<ItemDetail />} />
           {/* Protected Routes */}
-          <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
-          <Route path="/checkout/:bookingId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-          <Route path="/staff" element={<ProtectedRoute><StaffQueue /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+          <Route path="/bookings" element={<ProtectedRoute allowedRoles={['customer']}><Bookings /></ProtectedRoute>} />
+          <Route path="/checkout/:bookingId" element={<ProtectedRoute allowedRoles={['customer']}><Checkout /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute allowedRoles={['staff']}><StaffQueue /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute allowedRoles={['manager']}><Analytics /></ProtectedRoute>} />
         </Routes>
       </div>
     </>

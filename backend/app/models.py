@@ -3,6 +3,19 @@ from datetime import datetime, timezone
 from app.extensions import bcrypt, db
 
 
+class Role(db.Model):
+    __tablename__ = "roles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+        }
+
+
 class User(db.Model):
     __tablename__ = "users"
 
@@ -10,8 +23,14 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(255), nullable=True)
-    role = db.Column(db.String(50), default="customer", nullable=False)
+    role_id = db.Column(db.Integer, db.ForeignKey("roles.id"), nullable=False, default=1)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    role_rel = db.relationship("Role", backref="users", lazy="joined")
+
+    @property
+    def role(self) -> str:
+        return self.role_rel.name if self.role_rel else "customer"
 
     def set_password(self, password: str):
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
@@ -24,6 +43,7 @@ class User(db.Model):
             "id": self.id,
             "email": self.email,
             "full_name": self.full_name,
+            "role_id": self.role_id,
             "role": self.role,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -61,10 +81,18 @@ class Item(db.Model):
     category = db.relationship("Category", back_populates="items")
 
     def to_dict(self):
-        from app.services.pricing_engine import calculate_depreciated_value, get_item_daily_rate
+        from app.services.pricing_engine import (
+            calculate_depreciated_value,
+            get_item_daily_rate,
+        )
+
         cat_name = self.category.name if self.category else None
-        dep_val = calculate_depreciated_value(self.purchase_price, self.purchase_date, category_name=cat_name)
-        daily_rate = get_item_daily_rate(self.purchase_price, self.purchase_date, category_name=cat_name)
+        dep_val = calculate_depreciated_value(
+            self.purchase_price, self.purchase_date, category_name=cat_name
+        )
+        daily_rate = get_item_daily_rate(
+            self.purchase_price, self.purchase_date, category_name=cat_name
+        )
         return {
             "id": self.id,
             "name": self.name,
@@ -73,7 +101,9 @@ class Item(db.Model):
             "sku": self.sku,
             "category": self.category.to_dict() if self.category else None,
             "purchase_price": float(self.purchase_price),
-            "purchase_date": self.purchase_date.isoformat() if self.purchase_date else None,
+            "purchase_date": self.purchase_date.isoformat()
+            if self.purchase_date
+            else None,
             "replacement_price": float(self.replacement_price),
             "depreciated_value": dep_val,
             "daily_rate": daily_rate,
@@ -111,6 +141,7 @@ class Booking(db.Model):
         pricing_data = None
         if self.item and self.start_ts and self.end_ts:
             from app.services.pricing_engine import calculate_rental_pricing
+
             cat_name = self.item.category.name if self.item.category else None
             pricing_data = calculate_rental_pricing(
                 purchase_price=self.item.purchase_price,
@@ -155,9 +186,7 @@ class Rental(db.Model):
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     item = db.relationship("Item")
-    booking = db.relationship(
-        "Booking", backref=db.backref("rental", uselist=False)
-    )
+    booking = db.relationship("Booking", backref=db.backref("rental", uselist=False))
     damage_assessment = db.relationship(
         "DamageAssessment", back_populates="rental", uselist=False
     )
@@ -182,12 +211,13 @@ class Rental(db.Model):
         }
 
 
-
 class Payment(db.Model):
     __tablename__ = "payments"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(36), nullable=False, index=True)
-    rental_id = db.Column(db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True)
+    rental_id = db.Column(
+        db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True
+    )
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     payment_type = db.Column(db.String(50), nullable=False, default="deposit")
     provider = db.Column(db.String(50), nullable=True, default="simulated")
@@ -210,8 +240,12 @@ class Payment(db.Model):
 class ItemConditionLog(db.Model):
     __tablename__ = "item_condition_log"
     id = db.Column(db.Integer, primary_key=True)
-    item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=False, index=True)
-    rental_id = db.Column(db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True)
+    item_id = db.Column(
+        db.Integer, db.ForeignKey("items.id"), nullable=False, index=True
+    )
+    rental_id = db.Column(
+        db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True
+    )
     captured_by = db.Column(db.String(36), nullable=True)
     photo_url = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
@@ -301,9 +335,7 @@ class DamageAssessment(db.Model):
                 else 0.0
             ),
             "total_deduction": (
-                float(self.total_deduction)
-                if self.total_deduction is not None
-                else 0.0
+                float(self.total_deduction) if self.total_deduction is not None else 0.0
             ),
             "deposit_refunded": (
                 float(self.deposit_refunded)
@@ -312,21 +344,15 @@ class DamageAssessment(db.Model):
             ),
             "status": self.status,
             "dispute_reason": self.dispute_reason,
-            "disputed_at": (
-                self.disputed_at.isoformat() if self.disputed_at else None
-            ),
+            "disputed_at": (self.disputed_at.isoformat() if self.disputed_at else None),
             "manager_override_amount": (
                 float(self.manager_override_amount)
                 if self.manager_override_amount is not None
                 else None
             ),
             "manager_notes": self.manager_notes,
-            "resolved_at": (
-                self.resolved_at.isoformat() if self.resolved_at else None
-            ),
-            "created_at": (
-                self.created_at.isoformat() if self.created_at else None
-            ),
+            "resolved_at": (self.resolved_at.isoformat() if self.resolved_at else None),
+            "created_at": (self.created_at.isoformat() if self.created_at else None),
         }
 
 
@@ -352,6 +378,3 @@ class Notification(db.Model):
             "read": self.read,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
-
-
-
