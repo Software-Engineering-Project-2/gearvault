@@ -60,16 +60,20 @@ def authenticate_request():
 
         if user:
             g.current_user = user
-            # Resolve authoritative Supabase auth.users UUID for database integrity
-            auth_user_row = db.session.execute(
-                text("SELECT id FROM auth.users WHERE lower(email) = lower(:email) LIMIT 1"),
-                {"email": user.email},
-            ).fetchone()
-            if auth_user_row and auth_user_row[0]:
-                uuid_str = str(auth_user_row[0])
-                g.user_id = uuid_str
-                g.customer_id = uuid_str
-            else:
+            # Resolve authoritative Supabase auth.users UUID for database integrity if available
+            try:
+                auth_user_row = db.session.execute(
+                    text("SELECT id FROM auth.users WHERE lower(email) = lower(:email) LIMIT 1"),
+                    {"email": user.email},
+                ).fetchone()
+                if auth_user_row and auth_user_row[0]:
+                    uuid_str = str(auth_user_row[0])
+                    g.user_id = uuid_str
+                    g.customer_id = uuid_str
+                else:
+                    g.user_id = str(user.id)
+                    g.customer_id = str(user.id)
+            except Exception:
                 g.user_id = str(user.id)
                 g.customer_id = str(user.id)
             g.user_role = (user.role or "customer").lower()

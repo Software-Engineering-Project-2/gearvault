@@ -172,8 +172,16 @@ class TestNotificationsAndReports(unittest.TestCase):
         db.session.add(assessment)
         db.session.commit()
 
+        # Seed and login manager user for manager-only endpoints
+        mgr_user = User(email="manager@gearvault.com", full_name="Manager User", role="manager")
+        mgr_user.set_password("manager123")
+        db.session.add(mgr_user)
+        db.session.commit()
+        m_login = self.client.post("/api/auth/login", json={"email": "manager@gearvault.com", "password": "manager123"})
+        manager_headers = {"Authorization": f"Bearer {m_login.get_json()['access_token']}"}
+
         # 1. Analytics API
-        analytics_res = self.client.get("/api/manager/analytics", headers=self.auth_headers)
+        analytics_res = self.client.get("/api/manager/analytics", headers=manager_headers)
         self.assertEqual(analytics_res.status_code, 200)
         adata = analytics_res.get_json()
 
@@ -185,7 +193,7 @@ class TestNotificationsAndReports(unittest.TestCase):
         self.assertEqual(adata["most_rented_items"][0]["rental_count"], 2)
 
         # 2. CSV Export
-        csv_res = self.client.get("/api/manager/reports/monthly-csv", headers=self.auth_headers)
+        csv_res = self.client.get("/api/manager/reports/monthly-csv", headers=manager_headers)
         self.assertEqual(csv_res.status_code, 200)
         self.assertEqual(csv_res.mimetype, "text/csv")
         csv_text = csv_res.get_data(as_text=True)

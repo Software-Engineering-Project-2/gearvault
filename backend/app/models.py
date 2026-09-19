@@ -32,6 +32,22 @@ class User(db.Model):
     def role(self) -> str:
         return self.role_rel.name if self.role_rel else "customer"
 
+    @role.setter
+    def role(self, value):
+        if not value:
+            return
+        role_name = str(value).lower().strip()
+        role_map = {"customer": 1, "staff": 2, "manager": 3}
+        mapped_id = role_map.get(role_name, 1)
+        self.role_id = mapped_id
+        try:
+            r = Role.query.filter_by(name=role_name).first()
+            if r:
+                self.role_rel = r
+                self.role_id = r.id
+        except Exception:
+            pass
+
     def set_password(self, password: str):
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 

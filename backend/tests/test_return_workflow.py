@@ -18,16 +18,36 @@ class TestReturnAndDisputeWorkflow(unittest.TestCase):
         self.ctx.push()
         db.create_all()
 
-        # Seed test user
+        # Seed test user (customer)
         self.user = User(email="test@gearvault.com", full_name="Test Customer", role="customer")
         self.user.set_password("password123")
         db.session.add(self.user)
+
+        # Seed staff user
+        self.staff_user = User(email="staff_test@gearvault.com", full_name="Test Staff", role="staff")
+        self.staff_user.set_password("password123")
+        db.session.add(self.staff_user)
+
+        # Seed manager user
+        self.manager_user = User(email="manager_test@gearvault.com", full_name="Test Manager", role="manager")
+        self.manager_user.set_password("password123")
+        db.session.add(self.manager_user)
         db.session.commit()
 
-        # Login to get JWT
+        # Login customer
         res = self.client.post("/api/auth/login", json={"email": "test@gearvault.com", "password": "password123"})
         self.token = res.get_json()["access_token"]
         self.auth_headers = {"Authorization": f"Bearer {self.token}"}
+
+        # Login staff
+        res_staff = self.client.post("/api/auth/login", json={"email": "staff_test@gearvault.com", "password": "password123"})
+        self.staff_token = res_staff.get_json()["access_token"]
+        self.staff_headers = {"Authorization": f"Bearer {self.staff_token}"}
+
+        # Login manager
+        res_manager = self.client.post("/api/auth/login", json={"email": "manager_test@gearvault.com", "password": "password123"})
+        self.manager_token = res_manager.get_json()["access_token"]
+        self.manager_headers = {"Authorization": f"Bearer {self.manager_token}"}
 
         # Seed category and item
         self.cat = Category(name="Cameras", description="Photo gear")
@@ -80,7 +100,7 @@ class TestReturnAndDisputeWorkflow(unittest.TestCase):
 
         res = self.client.post(
             f"/api/staff/rentals/{rental.id}/return",
-            headers=self.auth_headers,
+            headers=self.staff_headers,
             json={
                 "notes": "Returned in mint condition with lens cap.",
                 "has_damage": False,
@@ -125,7 +145,7 @@ class TestReturnAndDisputeWorkflow(unittest.TestCase):
         # 1. Staff processes return with damage
         res = self.client.post(
             f"/api/staff/rentals/{rental.id}/return",
-            headers=self.auth_headers,
+            headers=self.staff_headers,
             json={
                 "notes": "Top dial stiff, slight mount play.",
                 "has_damage": True,
@@ -153,8 +173,8 @@ class TestReturnAndDisputeWorkflow(unittest.TestCase):
         self.assertEqual(disp_res.get_json()["assessment"]["status"], "disputed")
         self.assertEqual(disp_res.get_json()["rental"]["status"], "disputed")
 
-        # 3. List disputes for manager
-        list_res = self.client.get("/api/staff/disputes", headers=self.auth_headers)
+        # 3. List disputes for manager / staff
+        list_res = self.client.get("/api/staff/disputes", headers=self.staff_headers)
         self.assertEqual(list_res.status_code, 200)
         disputes = list_res.get_json().get("disputes", [])
         self.assertEqual(len(disputes), 1)
@@ -163,7 +183,7 @@ class TestReturnAndDisputeWorkflow(unittest.TestCase):
         # 4. Manager overrides dispute (FR020, BR3)
         override_res = self.client.post(
             f"/api/manager/disputes/{assessment_id}/override",
-            headers=self.auth_headers,
+            headers=self.manager_headers,
             json={
                 "override_amount": 2500.0,
                 "manager_notes": "Agreed to partial concession as customer noted pre-existing stiffness.",
