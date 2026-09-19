@@ -124,16 +124,17 @@ def create_app(test_config=None):
     # Expire holds even when no customer is currently browsing the catalog.
     # Database checks in the booking endpoints remain the final race-safe guard.
     if not app.config.get("TESTING"):
-        from app.routes.catalog import expire_holds
+        from app.routes.catalog import expire_holds, escalate_overdue_rentals
 
         def hold_expiry_worker():
             while True:
                 with app.app_context():
                     expire_holds()
+                    escalate_overdue_rentals()
                 threading.Event().wait(60)
 
         threading.Thread(
-            target=hold_expiry_worker, name="hold-expiry", daemon=True
+            target=hold_expiry_worker, name="hold-expiry-and-escalation", daemon=True
         ).start()
 
     @app.route("/")

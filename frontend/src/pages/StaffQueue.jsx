@@ -853,25 +853,79 @@ export default function StaffQueue() {
               </div>
             </div>
 
-            {/* Post-Return Condition Notes & Photos */}
-            <div style={{ marginTop: 14 }}>
-              <div className="form-row">
-                <label>Post-Rental Inspection Notes</label>
-                <textarea
-                  rows={2}
-                  value={returnNotes}
-                  onChange={e => setReturnNotes(e.target.value)}
-                  placeholder="Note physical wear, cleanliness, included accessories, or damaged components..."
-                />
+            {/* Structured Pre- vs Post-Rental Condition Comparison (FR016) */}
+            <div className="inspection-split-grid">
+              {/* Left: Pre-Rental Handover Baseline */}
+              <div className="inspection-column">
+                <div className="inspection-header" style={{ color: '#0369a1' }}>
+                  <span>📸 1. Pre-Rental Handover Baseline</span>
+                  <span className="badge available">Handover</span>
+                </div>
+                
+                <div className="condition-photo-box">
+                  {returnRental.pre_rental_condition?.photo_url ? (
+                    <img
+                      src={returnRental.pre_rental_condition.photo_url}
+                      alt="Pre-rental condition baseline"
+                      onError={e => { e.currentTarget.style.display = 'none' }}
+                    />
+                  ) : (
+                    <div className="condition-photo-placeholder">
+                      <span>📷</span>
+                      <span>No pre-rental photo logged</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="small muted" style={{ marginBottom: 4, fontWeight: 600 }}>
+                  Handover Condition Notes:
+                </div>
+                <div style={{ fontSize: 13, color: '#334155', background: '#fff', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', minHeight: 52 }}>
+                  {returnRental.pre_rental_condition?.notes || 'Standard dispatch inspection recorded — all accessories & caps included.'}
+                </div>
+                <div className="small muted" style={{ marginTop: 6, fontSize: 11 }}>
+                  Logged at: {formatTime(returnRental.pre_rental_condition?.captured_at || returnRental.checkout_at)}
+                </div>
               </div>
-              <div className="form-row">
-                <label>Post-Return Inspection Photo Reference URL</label>
-                <input
-                  type="text"
-                  value={returnPhotoUrl}
-                  onChange={e => setReturnPhotoUrl(e.target.value)}
-                  placeholder="https://example.com/photos/return-inspection.jpg"
-                />
+
+              {/* Right: Post-Rental Return Inspection */}
+              <div className="inspection-column">
+                <div className="inspection-header" style={{ color: '#b45309' }}>
+                  <span>🔍 2. Post-Rental Return Check</span>
+                  <span className="badge pending">Check-in</span>
+                </div>
+
+                <div className="form-row" style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 12 }}>Post-Return Photo Reference URL</label>
+                  <input
+                    type="text"
+                    value={returnPhotoUrl}
+                    onChange={e => setReturnPhotoUrl(e.target.value)}
+                    placeholder="https://example.com/photos/return-inspection.jpg"
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
+
+                {returnPhotoUrl && (
+                  <div className="condition-photo-box" style={{ height: 110, marginBottom: 10 }}>
+                    <img
+                      src={returnPhotoUrl}
+                      alt="Post-return inspection"
+                      onError={e => { e.currentTarget.style.display = 'none' }}
+                    />
+                  </div>
+                )}
+
+                <div className="form-row" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: 12 }}>Post-Rental Inspection Notes</label>
+                  <textarea
+                    rows={3}
+                    value={returnNotes}
+                    onChange={e => setReturnNotes(e.target.value)}
+                    placeholder="Examine glass, mount, buttons, and accessories against handover baseline..."
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
               </div>
             </div>
 

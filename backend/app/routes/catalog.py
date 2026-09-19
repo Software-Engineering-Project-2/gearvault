@@ -24,7 +24,9 @@ from app.models import (
     DamageType,
     DamageAssessment,
     Notification,
+    FinancialAuditLog,
 )
+from app.services.audit_service import log_financial_action
 from app.services.pricing_engine import (
     calculate_depreciated_value,
     calculate_rental_pricing,
@@ -124,7 +126,8 @@ def categories():
 @catalog_bp.get("/items")
 def list_items():
     expire_holds()
-    query = Item.query.filter_by(active=True)
+    include_inactive = request.args.get("include_inactive", "false").lower() == "true"
+    query = Item.query if include_inactive else Item.query.filter_by(active=True)
     term, category_id = (
         request.args.get("search", "").strip(),
         request.args.get("category_id"),
@@ -225,6 +228,136 @@ def get_item(item_id):
     return jsonify({"item": data})
 
 
+@catalog_bp.post("/items")
+@manager_required
+def create_item():
+    """
+    SRS §2.3 & §3.1: Manager adds a new product / equipment asset to inventory.
+    """
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    sku = (data.get("sku") or "").strip()
+    category_id = data.get("category_id")
+    purchase_price = data.get("purchase_price")
+    replacement_price = data.get("replacement_price")
+    purchase_date_str = data.get("purchase_date")
+    description = (data.get("description") or "").strip()
+    image_path = (data.get("image_path") or "").strip() or None
+
+    if not name:
+        return jsonify({"error": "Item name is required"}), 400
+    if not sku:
+        return jsonify({"error": "SKU is required"}), 400
+    if Item.query.filter(func.lower(Item.sku) == sku.lower()).first():
+        return jsonify({"error": f"An item with SKU '{sku}' already exists"}), 409
+    if not category_id:
+        return jsonify({"error": "Category is required"}), 400
+    category = db.session.get(Category, category_id)
+    if not category:
+        return jsonify({"error": "Invalid category specified"}), 400
+
+    try:
+        purchase_price_val = Decimal(str(purchase_price))
+        if purchase_price_val <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify({"error": "A valid positive purchase price is required"}), 400
+
+    try:
+        replacement_price_val = Decimal(str(replacement_price))
+        if replacement_price_val <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify({"error": "A valid positive replacement price is required"}), 400
+
+    purchase_date_val = None
+    if purchase_date_str:
+        try:
+            purchase_date_val = datetime.strptime(str(purchase_date_str)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return jsonify({"error": "purchase_date must be in YYYY-MM-DD format"}), 400
+    else:
+        purchase_date_val = datetime.now(timezone.utc).date()
+
+    item = Item(
+        sku=sku,
+        name=name,
+        description=description or None,
+        image_path=image_path,
+        purchase_price=purchase_price_val,
+        purchase_date=purchase_date_val,
+        replacement_price=replacement_price_val,
+        category_id=category.id,
+        active=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Equipment added to inventory successfully",
+        "item": item.to_dict(),
+    }), 201
+
+
+@catalog_bp.put("/items/<int:item_id>")
+@manager_required
+def update_item(item_id):
+    """
+    SRS §2.3 & §3.1: Manager updates equipment details or toggles active status.
+    """
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+
+    data = request.get_json() or {}
+    if "name" in data and str(data["name"]).strip():
+        item.name = str(data["name"]).strip()
+    if "description" in data:
+        item.description = str(data["description"]).strip() or None
+    if "image_path" in data:
+        item.image_path = str(data["image_path"]).strip() or None
+    if "active" in data:
+        item.active = bool(data["active"])
+    if "category_id" in data and data["category_id"]:
+        category = db.session.get(Category, data["category_id"])
+        if category:
+            item.category_id = category.id
+    if "purchase_price" in data and data["purchase_price"] is not None:
+        try:
+            val = Decimal(str(data["purchase_price"]))
+            if val > 0:
+                item.purchase_price = val
+        except Exception:
+            pass
+    if "replacement_price" in data and data["replacement_price"] is not None:
+        try:
+            val = Decimal(str(data["replacement_price"]))
+            if val > 0:
+                item.replacement_price = val
+        except Exception:
+            pass
+
+    db.session.commit()
+    return jsonify({
+        "message": "Equipment updated successfully",
+        "item": item.to_dict(),
+    })
+
+
+@catalog_bp.delete("/items/<int:item_id>")
+@manager_required
+def delete_item(item_id):
+    """
+    SRS §2.3 & §3.1: Soft-deletes / decommissions an item by setting active=False.
+    """
+    item = db.session.get(Item, item_id)
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+    item.active = False
+    db.session.commit()
+    return jsonify({"message": f"Equipment '{item.name}' has been deactivated from active inventory."})
+
+
 
 @catalog_bp.post("/bookings/hold")
 @roles_required("customer")
@@ -298,6 +431,14 @@ def confirm_payment(booking_id):
         provider=provider,
     )
     db.session.add(payment)
+
+    # Record financial audit log (SRS §5.3, §6.1)
+    log_financial_action(
+        action="deposit_collected",
+        amount=booking.deposit_amount,
+        user_id=booking.customer_id,
+        metadata={"booking_id": booking.id, "item_id": booking.item_id, "provider": provider},
+    )
 
     booking.status = BOOKING_STATUS_CONFIRMED
     booking.hold_expires_at = None
@@ -385,7 +526,15 @@ def staff_active_rentals():
     rentals = Rental.query.filter(
         func.lower(Rental.status) == "active"
     ).order_by(Rental.due_at.asc()).all()
-    return jsonify({"rentals": [r.to_dict() for r in rentals]})
+    results = []
+    for r in rentals:
+        r_dict = r.to_dict()
+        cond = ItemConditionLog.query.filter_by(rental_id=r.id).order_by(ItemConditionLog.captured_at.asc()).first()
+        if not cond:
+            cond = ItemConditionLog.query.filter_by(item_id=r.item_id).order_by(ItemConditionLog.captured_at.desc()).first()
+        r_dict["pre_rental_condition"] = cond.to_dict() if cond else None
+        results.append(r_dict)
+    return jsonify({"rentals": results})
 
 
 @catalog_bp.post("/staff/bookings/<int:booking_id>/handover")
@@ -644,6 +793,12 @@ def staff_process_return(rental_id):
             provider="simulated_counter",
         )
         db.session.add(refund_payment)
+        log_financial_action(
+            action="deposit_refund",
+            amount=settlement["deposit_refunded"],
+            user_id=rental.customer_id,
+            metadata={"rental_id": rental.id},
+        )
 
     if settlement["total_deduction"] > 0:
         deduction_payment = Payment(
@@ -654,6 +809,17 @@ def staff_process_return(rental_id):
             provider="simulated_counter",
         )
         db.session.add(deduction_payment)
+        log_financial_action(
+            action="damage_deduction",
+            amount=settlement["total_deduction"],
+            user_id=rental.customer_id,
+            metadata={
+                "rental_id": rental.id,
+                "damage_deduction": settlement.get("damage_deduction", 0.0),
+                "late_penalty": settlement.get("late_penalty", 0.0),
+                "replacement_charge": settlement.get("replacement_charge", 0.0),
+            },
+        )
 
     notify_damage_assessment_outcome(rental, assessment)
     db.session.commit()
@@ -778,6 +944,19 @@ def manager_override_dispute(assessment_id):
         provider="simulated_manager",
     )
     db.session.add(adjustment_payment)
+
+    log_financial_action(
+        action="manager_override",
+        amount=override_amount,
+        user_id=rental.customer_id if rental else g.customer_id,
+        metadata={
+            "assessment_id": assessment.id,
+            "rental_id": rental.id if rental else None,
+            "manager_id": g.customer_id,
+            "new_deposit_refund": new_deposit_refund,
+            "manager_notes": manager_notes or "Manager direct override applied.",
+        },
+    )
 
     if rental:
         notify_dispute_resolved(rental, assessment)
@@ -1008,6 +1187,78 @@ def manager_export_monthly_csv():
             "Content-Type": "text/csv; charset=utf-8",
         },
     )
+
+
+@catalog_bp.get("/manager/audit-logs")
+@manager_required
+def get_audit_logs():
+    """
+    SRS §5.3 & §6.1: Retrieves financial audit trail for all operations.
+    """
+    logs = FinancialAuditLog.query.order_by(FinancialAuditLog.created_at.desc()).limit(50).all()
+    return jsonify({"audit_logs": [log.to_dict() for log in logs]})
+
+
+def escalate_overdue_rentals():
+    """
+    SRS FR023 & BR4: Automatically flags rentals overdue past 7 days as 'presumed_lost',
+    charging full replacement price against deposit and creating audit logs.
+    """
+    try:
+        now = utcnow()
+        threshold = now - timedelta(days=7)
+        overdue_rentals = Rental.query.filter(
+            func.lower(Rental.status) == "active",
+            Rental.due_at <= threshold,
+        ).all()
+
+        for rental in overdue_rentals:
+            rental.status = "presumed_lost"
+            replacement_val = float(rental.item.replacement_price) if rental.item and rental.item.replacement_price else 0.0
+            deposit_val = float(rental.deposit_held) if rental.deposit_held else 0.0
+            refund = max(0.0, deposit_val - replacement_val)
+
+            assessment = DamageAssessment.query.filter_by(rental_id=rental.id).first()
+            if not assessment:
+                assessment = DamageAssessment(
+                    rental_id=rental.id,
+                    assessed_by="system_auto_escalation",
+                    notes="Automated escalation: rental exceeded 7 days past due date (Presumed Lost, FR023).",
+                    replacement_charge=Decimal(str(replacement_val)),
+                    total_deduction=Decimal(str(replacement_val)),
+                    deposit_refunded=Decimal(str(refund)),
+                    status="finalized",
+                )
+                db.session.add(assessment)
+            else:
+                assessment.replacement_charge = Decimal(str(replacement_val))
+                assessment.total_deduction = Decimal(str(replacement_val))
+                assessment.deposit_refunded = Decimal(str(refund))
+                assessment.status = "finalized"
+
+            # Create notification
+            from app.services.notification_service import send_notification
+            item_name = rental.item.name if rental.item else "Equipment"
+            send_notification(
+                user_id=rental.customer_id,
+                notif_type="presumed_lost",
+                title=f"Equipment Presumed Lost — {item_name}",
+                message=f"Your rental for {item_name} is more than 7 days overdue and has been escalated to Presumed Lost. A full replacement charge of ₹{replacement_val:,.2f} has been deducted from your security deposit.",
+            )
+
+            # Record audit log
+            log_financial_action(
+                action="presumed_lost_charge",
+                amount=replacement_val,
+                user_id=rental.customer_id,
+                metadata={"rental_id": rental.id, "item_name": item_name, "days_overdue": 7},
+            )
+
+        if overdue_rentals:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
 
 
 
