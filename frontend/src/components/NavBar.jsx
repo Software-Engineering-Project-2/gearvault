@@ -48,14 +48,34 @@ export default function NavBar({ user, onSignOut }) {
                   </Link>
                 )}
 
-                {/* Manager only: Analytics & Operations Reports */}
+                {/* Manager only: Modular Operations & Reporting Pages */}
                 {role === 'manager' && (
-                  <Link
-                    to="/analytics"
-                    className={`nav-link ${isActive('/analytics') ? 'active' : ''}`}
-                  >
-                    Analytics
-                  </Link>
+                  <>
+                    <Link
+                      to="/analytics"
+                      className={`nav-link ${isActive('/analytics') ? 'active' : ''}`}
+                    >
+                      Analytics
+                    </Link>
+                    <Link
+                      to="/disputes"
+                      className={`nav-link ${isActive('/disputes') ? 'active' : ''}`}
+                    >
+                      Disputes
+                    </Link>
+                    <Link
+                      to="/equipment"
+                      className={`nav-link ${isActive('/equipment') ? 'active' : ''}`}
+                    >
+                      Equipment
+                    </Link>
+                    <Link
+                      to="/overdue"
+                      className={`nav-link ${isActive('/overdue') ? 'active' : ''}`}
+                    >
+                      Overdue Fleet
+                    </Link>
+                  </>
                 )}
 
                 {/* Staff only: Counter Dispatch Queue */}

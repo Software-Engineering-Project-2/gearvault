@@ -38,6 +38,7 @@ from app.services.notification_service import (
     notify_dispatch_and_due_date,
     notify_dispute_resolved,
     notify_hold_expired,
+    notify_managers_of_dispute,
 )
 from app.services.pricing_engine import (
     calculate_depreciated_value,
@@ -945,6 +946,9 @@ def submit_damage_dispute(rental_id):
     assessment.dispute_reason = dispute_reason
     assessment.disputed_at = utcnow()
     rental.status = "disputed"
+
+    # Send in-app notification to all manager accounts
+    notify_managers_of_dispute(rental, assessment)
 
     db.session.commit()
 

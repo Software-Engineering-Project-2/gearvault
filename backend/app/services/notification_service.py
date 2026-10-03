@@ -93,3 +93,71 @@ def notify_dispute_resolved(rental, assessment) -> Optional[Notification]:
         title=f"Dispute Resolved by Manager — {item_name}",
         message=f"A manager reviewed your damage dispute. Final deduction adjusted to {override_str}. Final deposit refund of {refund_str} authorized.",
     )
+
+
+def notify_managers_of_dispute(rental, assessment) -> list:
+    """Notifies all manager accounts that a customer has disputed a damage assessment."""
+    from app.models import User, Role
+    from sqlalchemy import text
+
+    item_name = rental.item.name if rental.item else "Equipment"
+    deduct_str = (
+        f"₹{float(assessment.damage_deduction):,.2f}"
+        if assessment.damage_deduction is not None
+        else "the assessed deduction"
+    )
+    title = f"New Damage Dispute — {item_name}"
+    reason_snippet = (
+        assessment.dispute_reason.strip()
+        if assessment.dispute_reason
+        else "No rationale provided"
+    )
+    if len(reason_snippet) > 80:
+        reason_snippet = reason_snippet[:77] + "..."
+    message = (
+        f"A customer disputed {deduct_str} for {item_name} (Rental #{rental.id}). "
+        f"Reason: \"{reason_snippet}\". Please review and resolve in Disputes."
+    )
+
+    manager_uids = set()
+    # 1. Query local users table
+    try:
+        managers = User.query.join(Role).filter(Role.name == "manager").all()
+        for mgr in managers:
+            manager_uids.add(str(mgr.id))
+            try:
+                auth_user_row = db.session.execute(
+                    text("SELECT id FROM auth.users WHERE lower(email) = lower(:email) LIMIT 1"),
+                    {"email": mgr.email},
+                ).fetchone()
+                if auth_user_row and auth_user_row[0]:
+                    manager_uids.add(str(auth_user_row[0]))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 2. Query Supabase profiles if available
+    try:
+        prof_rows = db.session.execute(
+            text("SELECT p.id FROM profiles p JOIN roles r ON p.role_id = r.id WHERE r.name = 'manager'")
+        ).fetchall()
+        for prow in prof_rows:
+            if prow and prow[0]:
+                manager_uids.add(str(prow[0]))
+    except Exception:
+        pass
+
+    created_notifs = []
+    for uid in manager_uids:
+        n = send_notification(
+            user_id=uid,
+            notif_type="dispute_filed",
+            title=title,
+            message=message,
+        )
+        if n:
+            created_notifs.append(n)
+
+    return created_notifs
+

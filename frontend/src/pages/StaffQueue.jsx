@@ -602,7 +602,7 @@ export default function StaffQueue() {
                 ⚖️ Contested Damage Assessments ({disputes.length})
               </h4>
               <span className="badge disputed" style={{ fontSize: 11 }}>
-                Manager Review Required (BR3)
+                Manager Review Required
               </span>
             </div>
 
@@ -662,7 +662,7 @@ export default function StaffQueue() {
                   overrideAssessmentId === d.id ? (
                     <form onSubmit={(e) => handleOverrideSubmit(e, d.id)} style={{ marginTop: 14, background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #cbd5e1' }}>
                       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--accent)' }}>
-                        Manager Direct Override Form (BR3)
+                        Manager Direct Override Form
                       </div>
                       <div className="form-row">
                         <label>Revised Damage Deduction (₹)</label>
@@ -967,7 +967,7 @@ export default function StaffQueue() {
               {hasDamage && (
                 <div style={{ marginTop: 14 }}>
                   <div className="form-row">
-                    <label>Damage Classification (FR017)</label>
+                    <label>Damage Classification</label>
                     <select
                       value={damageTypeId}
                       onChange={e => setDamageTypeId(e.target.value)}
@@ -982,7 +982,7 @@ export default function StaffQueue() {
 
                   <div className="form-row">
                     <label style={{ marginBottom: 4, display: 'block' }}>
-                      Severity Score (1 to 5) — FR018
+                      Severity Score (1 to 5)
                     </label>
                     <div className="severity-selector">
                       {[1, 2, 3, 4, 5].map(score => {

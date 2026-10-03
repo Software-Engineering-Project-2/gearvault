@@ -8,6 +8,9 @@ import Bookings from './pages/Bookings'
 import Checkout from './pages/Checkout'
 import StaffQueue from './pages/StaffQueue'
 import Analytics from './pages/Analytics'
+import Disputes from './pages/Disputes'
+import Equipment from './pages/Equipment'
+import OverdueFleet from './pages/OverdueFleet'
 import ProtectedRoute from './components/ProtectedRoute'
 import NavBar from './components/NavBar'
 import { getUser } from './lib/api'
@@ -31,6 +34,9 @@ export default function App() {
           <Route path="/checkout/:bookingId" element={<ProtectedRoute allowedRoles={['customer']}><Checkout /></ProtectedRoute>} />
           <Route path="/staff" element={<ProtectedRoute allowedRoles={['staff']}><StaffQueue /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute allowedRoles={['manager']}><Analytics /></ProtectedRoute>} />
+          <Route path="/disputes" element={<ProtectedRoute allowedRoles={['manager']}><Disputes /></ProtectedRoute>} />
+          <Route path="/equipment" element={<ProtectedRoute allowedRoles={['manager']}><Equipment /></ProtectedRoute>} />
+          <Route path="/overdue" element={<ProtectedRoute allowedRoles={['manager']}><OverdueFleet /></ProtectedRoute>} />
         </Routes>
       </div>
     </>

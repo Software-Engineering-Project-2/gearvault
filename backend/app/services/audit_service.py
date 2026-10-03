@@ -17,11 +17,18 @@ def log_financial_action(
 ) -> Optional[FinancialAuditLog]:
     """Creates an audit log entry within the current database transaction."""
     try:
+        import uuid as _uuid
         amt = Decimal(str(amount)) if amount is not None else None
+        valid_uid = None
+        if user_id:
+            try:
+                valid_uid = str(_uuid.UUID(str(user_id)))
+            except (ValueError, TypeError):
+                valid_uid = None
         entry = FinancialAuditLog(
             action=action,
             amount=amt,
-            user_id=str(user_id) if user_id else None,
+            user_id=valid_uid,
             metadata_json=metadata or {},
         )
         db.session.add(entry)

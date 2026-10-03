@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, getToken } from '../lib/api'
 
 export default function NotificationBell() {
+  const navigate = useNavigate()
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
@@ -63,12 +65,25 @@ export default function NotificationBell() {
 
   const getIcon = (type) => {
     switch (type) {
+      case 'dispute_filed': return '⚠️'
       case 'hold_expired': return '⏳'
       case 'booking_confirmed': return '💳'
       case 'return_due': return '🚚'
       case 'damage_assessed': return '🛠️'
       case 'dispute_resolved': return '⚖️'
       default: return '🔔'
+    }
+  }
+
+  const handleItemClick = async (n) => {
+    if (!n.read) {
+      await markAsRead(n.id)
+    }
+    setIsOpen(false)
+    if (n.type === 'dispute_filed') {
+      navigate('/disputes')
+    } else if (['booking_confirmed', 'return_due', 'damage_assessed', 'dispute_resolved'].includes(n.type)) {
+      navigate('/bookings')
     }
   }
 
@@ -124,7 +139,8 @@ export default function NotificationBell() {
                 <div
                   key={n.id}
                   className={`notif-item ${n.read ? 'read' : 'unread'}`}
-                  onClick={() => !n.read && markAsRead(n.id)}
+                  onClick={() => handleItemClick(n)}
+                  style={{ cursor: 'pointer' }}
                 >
                   <div className="notif-icon">{getIcon(n.type)}</div>
                   <div className="notif-body">

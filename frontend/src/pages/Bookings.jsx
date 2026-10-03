@@ -235,7 +235,7 @@ export default function Bookings() {
 
           <form onSubmit={handleDisputeSubmit} style={{ marginTop: 14 }}>
             <div className="form-row">
-              <label>State Your Reason for Disputing this Deduction (FR019)</label>
+              <label>State Your Reason for Disputing this Deduction</label>
               <textarea
                 rows={3}
                 value={disputeReason}

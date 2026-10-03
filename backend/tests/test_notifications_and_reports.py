@@ -201,6 +201,66 @@ class TestNotificationsAndReports(unittest.TestCase):
         self.assertIn("Sennheiser MKH 416", csv_text)
         self.assertIn("AUD-001", csv_text)
 
+    def test_dispute_submission_notifies_managers(self):
+        """When a customer submits a dispute, all manager users receive a 'dispute_filed' notification."""
+        # Seed manager
+        mgr_user = User(email="manager_disp@gearvault.com", full_name="Manager Disp", role="manager")
+        mgr_user.set_password("manager123")
+        db.session.add(mgr_user)
+        db.session.commit()
+
+        # Seed rental and assessed damage
+        now = datetime.now(timezone.utc)
+        rental = Rental(
+            booking_id=None,
+            item_id=self.item.id,
+            customer_id=str(self.user.id),
+            checkout_at=now - timedelta(days=3),
+            due_at=now - timedelta(days=1),
+            returned_at=now - timedelta(days=1),
+            status="returned",
+            total_price=Decimal("4000.00"),
+            deposit_held=Decimal("10000.00"),
+        )
+        db.session.add(rental)
+        db.session.commit()
+
+        assessment = DamageAssessment(
+            rental_id=rental.id,
+            damage_type_id=None,
+            severity=3,
+            damage_deduction=Decimal("2500.00"),
+            late_penalty=Decimal("0.00"),
+            total_deduction=Decimal("2500.00"),
+            deposit_refunded=Decimal("7500.00"),
+            status="assessed",
+        )
+        db.session.add(assessment)
+        db.session.commit()
+
+        # Customer submits dispute
+        dispute_res = self.client.post(
+            f"/api/rentals/{rental.id}/dispute",
+            headers=self.auth_headers,
+            json={"reason": "The scratches were pre-existing before dispatch."},
+        )
+        self.assertEqual(dispute_res.status_code, 200)
+
+        # Check manager received dispute_filed notification
+        notif = Notification.query.filter_by(user_id=str(mgr_user.id), type="dispute_filed").first()
+        self.assertIsNotNone(notif)
+        self.assertIn("New Damage Dispute", notif.title)
+        self.assertIn("Sennheiser MKH 416", notif.title)
+        self.assertIn("pre-existing", notif.message)
+
+        # Login manager and retrieve notification through API
+        m_login = self.client.post("/api/auth/login", json={"email": "manager_disp@gearvault.com", "password": "manager123"})
+        mgr_headers = {"Authorization": f"Bearer {m_login.get_json()['access_token']}"}
+        m_notifs = self.client.get("/api/notifications", headers=mgr_headers).get_json()
+        self.assertEqual(m_notifs["unread_count"], 1)
+        self.assertEqual(m_notifs["notifications"][0]["type"], "dispute_filed")
+
 
 if __name__ == "__main__":
     unittest.main()
+
