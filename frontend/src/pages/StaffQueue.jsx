@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api, getUser } from '../lib/api'
 import RentalAgreementModal from '../components/RentalAgreementModal'
+import { uploadStorageFile } from '../lib/storage'
 
 const formatTime = value => {
   if (!value) return '—'
@@ -9,6 +10,9 @@ const formatTime = value => {
     timeStyle: 'short'
   })
 }
+
+const CONDITION_IMAGES_BUCKET =
+  import.meta.env.VITE_SUPABASE_CONDITION_IMAGES_BUCKET || 'condition_images'
 
 export default function StaffQueue() {
   const [activeTab, setActiveTab] = useState('confirmed') // 'confirmed' | 'active_rentals' | 'disputes'
@@ -26,6 +30,7 @@ export default function StaffQueue() {
   const [showConditionLog, setShowConditionLog] = useState(false)
   const [conditionNotes, setConditionNotes] = useState('Item inspected with client. All standard accessories, caps, and battery included.')
   const [photoUrl, setPhotoUrl] = useState('')
+  const [conditionPhotoFile, setConditionPhotoFile] = useState(null)
   const [processingHandover, setProcessingHandover] = useState(false)
   const [selectedAgreementData, setSelectedAgreementData] = useState(null)
 
@@ -33,6 +38,7 @@ export default function StaffQueue() {
   const [returnRental, setReturnRental] = useState(null)
   const [returnNotes, setReturnNotes] = useState('')
   const [returnPhotoUrl, setReturnPhotoUrl] = useState('')
+  const [returnPhotoFile, setReturnPhotoFile] = useState(null)
   const [hasDamage, setHasDamage] = useState(false)
   const [damageTypeId, setDamageTypeId] = useState('')
   const [severity, setSeverity] = useState(1)
@@ -82,8 +88,11 @@ export default function StaffQueue() {
     setMessage('')
 
     try {
+      const uploadedPhoto = showConditionLog && conditionPhotoFile
+        ? await uploadStorageFile(conditionPhotoFile, 'pre-dispatch', CONDITION_IMAGES_BUCKET)
+        : null
       const payload = showConditionLog
-        ? { notes: conditionNotes, photo_url: photoUrl }
+        ? { notes: conditionNotes, photo_url: uploadedPhoto?.publicUrl || photoUrl }
         : {}
 
       const res = await api(`/staff/bookings/${handoverBooking.id}/handover`, {
@@ -94,6 +103,8 @@ export default function StaffQueue() {
       setMessage(res.message || 'Equipment successfully dispatched and rental activated.')
       setHandoverBooking(null)
       setShowConditionLog(false)
+      setConditionPhotoFile(null)
+      setPhotoUrl('')
       loadData()
     } catch (err) {
       setError(err.message || 'Failed to process equipment dispatch.')
@@ -110,9 +121,12 @@ export default function StaffQueue() {
     setMessage('')
 
     try {
+      const uploadedPhoto = returnPhotoFile
+        ? await uploadStorageFile(returnPhotoFile, 'post-rental', CONDITION_IMAGES_BUCKET)
+        : null
       const payload = {
         notes: returnNotes,
-        photo_url: returnPhotoUrl,
+        photo_url: uploadedPhoto?.publicUrl || returnPhotoUrl,
         has_damage: hasDamage,
         damage_type_id: hasDamage ? Number(damageTypeId) : null,
         severity: hasDamage ? Number(severity) : null,
@@ -130,6 +144,7 @@ export default function StaffQueue() {
       setSeverity(1)
       setReturnNotes('')
       setReturnPhotoUrl('')
+      setReturnPhotoFile(null)
       setForcePresumedLost(false)
       loadData()
     } catch (err) {
@@ -765,13 +780,15 @@ export default function StaffQueue() {
                   />
                 </div>
                 <div className="form-row" style={{ marginBottom: 0 }}>
-                  <label>Inspection Photo Reference URL</label>
+                  <label>Pre-Dispatch Condition Photo</label>
                   <input
-                    type="text"
-                    value={photoUrl}
-                    onChange={e => setPhotoUrl(e.target.value)}
-                    placeholder="https://example.com/photos/item-condition.jpg"
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setConditionPhotoFile(e.target.files?.[0] || null)}
                   />
+                  <p className="muted small" style={{ margin: '4px 0 0' }}>
+                    {conditionPhotoFile ? conditionPhotoFile.name : 'Upload a photo of the equipment condition before dispatch.'}
+                  </p>
                 </div>
               </div>
             )}
@@ -861,7 +878,7 @@ export default function StaffQueue() {
                   <span>📸 1. Pre-Rental Handover Baseline</span>
                   <span className="badge available">Handover</span>
                 </div>
-                
+
                 <div className="condition-photo-box">
                   {returnRental.pre_rental_condition?.photo_url ? (
                     <img
@@ -896,14 +913,20 @@ export default function StaffQueue() {
                 </div>
 
                 <div className="form-row" style={{ marginBottom: 10 }}>
-                  <label style={{ fontSize: 12 }}>Post-Return Photo Reference URL</label>
+                  <label style={{ fontSize: 12 }}>Post-Return Inspection Photo</label>
                   <input
-                    type="text"
-                    value={returnPhotoUrl}
-                    onChange={e => setReturnPhotoUrl(e.target.value)}
-                    placeholder="https://example.com/photos/return-inspection.jpg"
+                    type="file"
+                    accept="image/*"
+                    onChange={e => {
+                      const file = e.target.files?.[0] || null
+                      setReturnPhotoFile(file)
+                      setReturnPhotoUrl(file ? URL.createObjectURL(file) : '')
+                    }}
                     style={{ fontSize: 13 }}
                   />
+                  <p className="muted small" style={{ margin: '4px 0 0' }}>
+                    {returnPhotoFile ? returnPhotoFile.name : 'Upload a photo showing the equipment condition after rental.'}
+                  </p>
                 </div>
 
                 {returnPhotoUrl && (

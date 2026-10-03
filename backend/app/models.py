@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from sqlalchemy.types import Uuid
+
 from app.extensions import bcrypt, db
 
 
@@ -23,7 +25,9 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(255), nullable=True)
-    role_id = db.Column(db.Integer, db.ForeignKey("roles.id"), nullable=False, default=1)
+    role_id = db.Column(
+        db.Integer, db.ForeignKey("roles.id"), nullable=False, default=1
+    )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     role_rel = db.relationship("Role", backref="users", lazy="joined")
@@ -399,7 +403,7 @@ class Notification(db.Model):
 class FinancialAuditLog(db.Model):
     __tablename__ = "financial_audit_log"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(36), nullable=True, index=True)
+    user_id = db.Column(Uuid(as_uuid=False), nullable=True, index=True)
     action = db.Column(db.Text, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=True)
     metadata_json = db.Column("metadata", db.JSON, nullable=True)
@@ -416,4 +420,3 @@ class FinancialAuditLog(db.Model):
             "metadata": self.metadata_json,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
-

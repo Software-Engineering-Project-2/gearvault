@@ -9,7 +9,7 @@ from functools import wraps
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, g, jsonify, request, Response
+from flask import Blueprint, Response, g, jsonify, request
 from flask_jwt_extended import decode_token
 from sqlalchemy import func, or_
 
@@ -17,32 +17,32 @@ from app.extensions import db
 from app.models import (
     Booking,
     Category,
-    Item,
-    Rental,
-    Payment,
-    ItemConditionLog,
-    DamageType,
     DamageAssessment,
-    Notification,
+    DamageType,
     FinancialAuditLog,
+    Item,
+    ItemConditionLog,
+    Notification,
+    Payment,
+    Rental,
 )
 from app.services.audit_service import log_financial_action
+from app.services.damage_engine import (
+    calculate_damage_deduction,
+    calculate_late_penalty,
+    evaluate_return_settlement,
+)
+from app.services.notification_service import (
+    notify_booking_confirmed,
+    notify_damage_assessment_outcome,
+    notify_dispatch_and_due_date,
+    notify_dispute_resolved,
+    notify_hold_expired,
+)
 from app.services.pricing_engine import (
     calculate_depreciated_value,
     calculate_rental_pricing,
     get_item_daily_rate,
-)
-from app.services.damage_engine import (
-    evaluate_return_settlement,
-    calculate_damage_deduction,
-    calculate_late_penalty,
-)
-from app.services.notification_service import (
-    notify_hold_expired,
-    notify_booking_confirmed,
-    notify_dispatch_and_due_date,
-    notify_damage_assessment_outcome,
-    notify_dispute_resolved,
 )
 
 catalog_bp = Blueprint("catalog", __name__, url_prefix="/api")
@@ -56,10 +56,10 @@ BOOKING_STATUS_EXPIRED = "Expired"
 
 from app.rbac import (
     customer_required,
-    staff_required,
-    manager_required,
     jwt_required_custom,
+    manager_required,
     roles_required,
+    staff_required,
 )
 
 
@@ -273,7 +273,9 @@ def create_item():
     purchase_date_val = None
     if purchase_date_str:
         try:
-            purchase_date_val = datetime.strptime(str(purchase_date_str)[:10], "%Y-%m-%d").date()
+            purchase_date_val = datetime.strptime(
+                str(purchase_date_str)[:10], "%Y-%m-%d"
+            ).date()
         except Exception:
             return jsonify({"error": "purchase_date must be in YYYY-MM-DD format"}), 400
     else:
@@ -293,10 +295,12 @@ def create_item():
     db.session.add(item)
     db.session.commit()
 
-    return jsonify({
-        "message": "Equipment added to inventory successfully",
-        "item": item.to_dict(),
-    }), 201
+    return jsonify(
+        {
+            "message": "Equipment added to inventory successfully",
+            "item": item.to_dict(),
+        }
+    ), 201
 
 
 @catalog_bp.put("/items/<int:item_id>")
@@ -338,10 +342,12 @@ def update_item(item_id):
             pass
 
     db.session.commit()
-    return jsonify({
-        "message": "Equipment updated successfully",
-        "item": item.to_dict(),
-    })
+    return jsonify(
+        {
+            "message": "Equipment updated successfully",
+            "item": item.to_dict(),
+        }
+    )
 
 
 @catalog_bp.delete("/items/<int:item_id>")
@@ -355,8 +361,11 @@ def delete_item(item_id):
         return jsonify({"error": "Item not found"}), 404
     item.active = False
     db.session.commit()
-    return jsonify({"message": f"Equipment '{item.name}' has been deactivated from active inventory."})
-
+    return jsonify(
+        {
+            "message": f"Equipment '{item.name}' has been deactivated from active inventory."
+        }
+    )
 
 
 @catalog_bp.post("/bookings/hold")
@@ -415,11 +424,16 @@ def confirm_payment(booking_id):
     booking = db.session.get(Booking, booking_id)
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
-    if str(booking.customer_id) != str(g.customer_id) and getattr(g, "user_role", "") != "manager":
-        return jsonify({"error": "You do not have permission to access this booking"}), 403
+    if (
+        str(booking.customer_id) != str(g.customer_id)
+        and getattr(g, "user_role", "") != "manager"
+    ):
+        return jsonify(
+            {"error": "You do not have permission to access this booking"}
+        ), 403
     if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify({"error": "Only an active hold can be confirmed"}), 409
-    
+
     data = request.get_json() or {}
     provider = data.get("provider", "simulated_card")
 
@@ -437,7 +451,11 @@ def confirm_payment(booking_id):
         action="deposit_collected",
         amount=booking.deposit_amount,
         user_id=booking.customer_id,
-        metadata={"booking_id": booking.id, "item_id": booking.item_id, "provider": provider},
+        metadata={
+            "booking_id": booking.id,
+            "item_id": booking.item_id,
+            "provider": provider,
+        },
     )
 
     booking.status = BOOKING_STATUS_CONFIRMED
@@ -453,7 +471,6 @@ def confirm_payment(booking_id):
     )
 
 
-
 @catalog_bp.delete("/bookings/<int:booking_id>")
 @customer_required
 def cancel_hold(booking_id):
@@ -461,8 +478,13 @@ def cancel_hold(booking_id):
     booking = db.session.get(Booking, booking_id)
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
-    if str(booking.customer_id) != str(g.customer_id) and getattr(g, "user_role", "") != "manager":
-        return jsonify({"error": "You do not have permission to access this booking"}), 403
+    if (
+        str(booking.customer_id) != str(g.customer_id)
+        and getattr(g, "user_role", "") != "manager"
+    ):
+        return jsonify(
+            {"error": "You do not have permission to access this booking"}
+        ), 403
     if (booking.status or "").lower() != BOOKING_STATUS_HELD.lower():
         return jsonify(
             {"error": "Only a soft hold may be cancelled before checkout"}
@@ -485,9 +507,11 @@ def my_bookings():
 @catalog_bp.get("/rentals/mine")
 @jwt_required_custom
 def my_rentals():
-    rentals = Rental.query.filter_by(customer_id=g.customer_id).order_by(
-        Rental.created_at.desc()
-    ).all()
+    rentals = (
+        Rental.query.filter_by(customer_id=g.customer_id)
+        .order_by(Rental.created_at.desc())
+        .all()
+    )
     return jsonify({"rentals": [rental.to_dict() for rental in rentals]})
 
 
@@ -499,8 +523,12 @@ def get_booking(booking_id):
     if not booking:
         return jsonify({"error": "Booking not found"}), 404
     # Customers can only view their own bookings; Staff and Manager can view any booking for operational pickup/audit
-    if getattr(g, "user_role", "") == "customer" and str(booking.customer_id) != str(g.customer_id):
-        return jsonify({"error": "You do not have permission to access this booking"}), 403
+    if getattr(g, "user_role", "") == "customer" and str(booking.customer_id) != str(
+        g.customer_id
+    ):
+        return jsonify(
+            {"error": "You do not have permission to access this booking"}
+        ), 403
     return jsonify({"booking": booking.to_dict()})
 
 
@@ -508,14 +536,19 @@ def get_booking(booking_id):
 # STAFF & MANAGER OPERATIONS ENDPOINTS
 # ==========================================
 
+
 @catalog_bp.get("/staff/bookings/confirmed")
 @staff_required
 def staff_confirmed_bookings():
     expire_holds()
     # Returns all confirmed bookings ready for equipment pickup
-    bookings = Booking.query.filter(
-        func.lower(Booking.status) == BOOKING_STATUS_CONFIRMED.lower()
-    ).order_by(Booking.start_ts.asc()).all()
+    bookings = (
+        Booking.query.filter(
+            func.lower(Booking.status) == BOOKING_STATUS_CONFIRMED.lower()
+        )
+        .order_by(Booking.start_ts.asc())
+        .all()
+    )
     return jsonify({"bookings": [b.to_dict() for b in bookings]})
 
 
@@ -523,15 +556,25 @@ def staff_confirmed_bookings():
 @staff_required
 def staff_active_rentals():
     # Returns all active rentals currently checked out to customers
-    rentals = Rental.query.filter(
-        func.lower(Rental.status) == "active"
-    ).order_by(Rental.due_at.asc()).all()
+    rentals = (
+        Rental.query.filter(func.lower(Rental.status) == "active")
+        .order_by(Rental.due_at.asc())
+        .all()
+    )
     results = []
     for r in rentals:
         r_dict = r.to_dict()
-        cond = ItemConditionLog.query.filter_by(rental_id=r.id).order_by(ItemConditionLog.captured_at.asc()).first()
+        cond = (
+            ItemConditionLog.query.filter_by(rental_id=r.id)
+            .order_by(ItemConditionLog.captured_at.asc())
+            .first()
+        )
         if not cond:
-            cond = ItemConditionLog.query.filter_by(item_id=r.item_id).order_by(ItemConditionLog.captured_at.desc()).first()
+            cond = (
+                ItemConditionLog.query.filter_by(item_id=r.item_id)
+                .order_by(ItemConditionLog.captured_at.desc())
+                .first()
+            )
         r_dict["pre_rental_condition"] = cond.to_dict() if cond else None
         results.append(r_dict)
     return jsonify({"rentals": results})
@@ -546,7 +589,6 @@ def staff_process_handover(booking_id):
         return jsonify({"error": "Booking not found"}), 404
     if (booking.status or "").lower() != BOOKING_STATUS_CONFIRMED.lower():
         return jsonify({"error": "Only confirmed bookings can be handed over"}), 400
-
 
     data = request.get_json() or {}
     condition_notes = data.get("notes", "").strip()
@@ -565,7 +607,9 @@ def staff_process_handover(booking_id):
         db.session.flush()
 
     # Calculate final rental total price using pricing engine
-    cat_name = booking.item.category.name if booking.item and booking.item.category else None
+    cat_name = (
+        booking.item.category.name if booking.item and booking.item.category else None
+    )
     pricing = calculate_rental_pricing(
         purchase_price=booking.item.purchase_price if booking.item else 0,
         purchase_date=booking.item.purchase_date if booking.item else None,
@@ -597,10 +641,12 @@ def staff_process_handover(booking_id):
     notify_dispatch_and_due_date(rental)
     db.session.commit()
 
-    return jsonify({
-        "message": f"Handover complete. Rental for {booking.item.name if booking.item else 'item'} is now Active.",
-        "rental": rental.to_dict()
-    }), 200
+    return jsonify(
+        {
+            "message": f"Handover complete. Rental for {booking.item.name if booking.item else 'item'} is now Active.",
+            "rental": rental.to_dict(),
+        }
+    ), 200
 
 
 @catalog_bp.post("/pricing/estimate")
@@ -614,16 +660,16 @@ def estimate_price():
     end_val = data.get("end_ts")
     if not item_id or not start_val or not end_val:
         return jsonify({"error": "item_id, start_ts, and end_ts are required"}), 400
-    
+
     item = db.session.get(Item, item_id)
     if not item:
         return jsonify({"error": "Item not found"}), 404
-        
+
     try:
         start, end = parse_time(start_val), parse_time(end_val)
         if start >= end:
             raise ValueError("End date must be after start date")
-            
+
         cat_name = item.category.name if item.category else None
         pricing = calculate_rental_pricing(
             purchase_price=item.purchase_price,
@@ -633,11 +679,13 @@ def estimate_price():
             category_name=cat_name,
             replacement_price=item.replacement_price,
         )
-        return jsonify({
-            "item_id": item.id,
-            "item_name": item.name,
-            "pricing": pricing,
-        })
+        return jsonify(
+            {
+                "item_id": item.id,
+                "item_name": item.name,
+                "pricing": pricing,
+            }
+        )
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
 
@@ -645,6 +693,7 @@ def estimate_price():
 # =========================================================
 # INCREMENT 4: RETURN & DAMAGE ASSESSMENT ENDPOINTS (FR015–FR023)
 # =========================================================
+
 
 @catalog_bp.get("/damage-types")
 def get_damage_types():
@@ -706,8 +755,16 @@ def staff_process_return(rental_id):
     rental = db.session.get(Rental, rental_id)
     if not rental:
         return jsonify({"error": "Rental not found"}), 404
-    if (rental.status or "").lower() not in ("active", "checkedout", "under_assessment"):
-        return jsonify({"error": f"Rental is currently '{rental.status}'; only active rentals can be returned"}), 400
+    if (rental.status or "").lower() not in (
+        "active",
+        "checkedout",
+        "under_assessment",
+    ):
+        return jsonify(
+            {
+                "error": f"Rental is currently '{rental.status}'; only active rentals can be returned"
+            }
+        ), 400
 
     data = request.get_json() or {}
     condition_notes = data.get("notes", "").strip()
@@ -721,8 +778,12 @@ def staff_process_return(rental_id):
     cat_name = item.category.name if item and item.category else None
     purchase_price = float(item.purchase_price) if item and item.purchase_price else 0.0
     purchase_date = item.purchase_date if item else None
-    replacement_price = float(item.replacement_price) if item and item.replacement_price else 0.0
-    depreciated_val = calculate_depreciated_value(purchase_price, purchase_date, category_name=cat_name)
+    replacement_price = (
+        float(item.replacement_price) if item and item.replacement_price else 0.0
+    )
+    depreciated_val = calculate_depreciated_value(
+        purchase_price, purchase_date, category_name=cat_name
+    )
 
     damage_type_weight = 0.0
     selected_damage_type = None
@@ -749,7 +810,12 @@ def staff_process_return(rental_id):
         item_id=rental.item_id,
         rental_id=rental.id,
         captured_by=g.customer_id,
-        notes=condition_notes or ("Post-return check: item in good condition" if not has_damage else "Damage noted upon return"),
+        notes=condition_notes
+        or (
+            "Post-return check: item in good condition"
+            if not has_damage
+            else "Damage noted upon return"
+        ),
         photo_url=photo_url or None,
         captured_at=now,
     )
@@ -762,7 +828,9 @@ def staff_process_return(rental_id):
         db.session.add(assessment)
 
     assessment.assessed_by = g.customer_id
-    assessment.damage_type_id = selected_damage_type.id if selected_damage_type else None
+    assessment.damage_type_id = (
+        selected_damage_type.id if selected_damage_type else None
+    )
     assessment.severity = int(severity) if (has_damage and severity) else None
     assessment.notes = condition_notes or None
     assessment.damage_deduction = Decimal(str(settlement["damage_deduction"]))
@@ -770,9 +838,13 @@ def staff_process_return(rental_id):
     assessment.replacement_charge = Decimal(str(settlement["replacement_charge"]))
     assessment.total_deduction = Decimal(str(settlement["total_deduction"]))
     assessment.deposit_refunded = Decimal(str(settlement["deposit_refunded"]))
-    
+
     # Status: if damage deduction exists, customer may dispute -> 'assessed'; otherwise 'finalized'
-    assessment.status = "assessed" if (has_damage and settlement["damage_deduction"] > 0) else "finalized"
+    assessment.status = (
+        "assessed"
+        if (has_damage and settlement["damage_deduction"] > 0)
+        else "finalized"
+    )
 
     # 3. Update Rental record
     rental.returned_at = now
@@ -824,12 +896,14 @@ def staff_process_return(rental_id):
     notify_damage_assessment_outcome(rental, assessment)
     db.session.commit()
 
-    return jsonify({
-        "message": f"Return processed successfully. Deposit refund of ₹{settlement['deposit_refunded']:,.2f} authorized.",
-        "rental": rental.to_dict(),
-        "settlement": settlement,
-        "assessment": assessment.to_dict(),
-    }), 200
+    return jsonify(
+        {
+            "message": f"Return processed successfully. Deposit refund of ₹{settlement['deposit_refunded']:,.2f} authorized.",
+            "rental": rental.to_dict(),
+            "settlement": settlement,
+            "assessment": assessment.to_dict(),
+        }
+    ), 200
 
 
 @catalog_bp.post("/rentals/<int:rental_id>/dispute")
@@ -843,20 +917,29 @@ def submit_damage_dispute(rental_id):
         return jsonify({"error": "Rental not found"}), 404
 
     # Ownership check: customers can only dispute their own rentals
-    if str(rental.customer_id) != str(g.customer_id) and getattr(g, "user_role", "") != "manager":
-        return jsonify({"error": "You do not have permission to dispute this rental"}), 403
+    if (
+        str(rental.customer_id) != str(g.customer_id)
+        and getattr(g, "user_role", "") != "manager"
+    ):
+        return jsonify(
+            {"error": "You do not have permission to dispute this rental"}
+        ), 403
 
     assessment = DamageAssessment.query.filter_by(rental_id=rental.id).first()
     if not assessment:
         return jsonify({"error": "No damage assessment exists for this rental"}), 404
 
     if assessment.status != "assessed":
-        return jsonify({"error": f"Assessment cannot be disputed in '{assessment.status}' status"}), 400
+        return jsonify(
+            {"error": f"Assessment cannot be disputed in '{assessment.status}' status"}
+        ), 400
 
     data = request.get_json() or {}
     dispute_reason = data.get("reason", "").strip()
     if not dispute_reason:
-        return jsonify({"error": "Please provide a reason for disputing the damage assessment"}), 400
+        return jsonify(
+            {"error": "Please provide a reason for disputing the damage assessment"}
+        ), 400
 
     assessment.status = "disputed"
     assessment.dispute_reason = dispute_reason
@@ -865,11 +948,13 @@ def submit_damage_dispute(rental_id):
 
     db.session.commit()
 
-    return jsonify({
-        "message": "Dispute submitted successfully. A manager will review your dispute.",
-        "assessment": assessment.to_dict(),
-        "rental": rental.to_dict(),
-    }), 200
+    return jsonify(
+        {
+            "message": "Dispute submitted successfully. A manager will review your dispute.",
+            "assessment": assessment.to_dict(),
+            "rental": rental.to_dict(),
+        }
+    ), 200
 
 
 @catalog_bp.get("/staff/disputes")
@@ -878,7 +963,11 @@ def list_disputes():
     """
     Returns all assessments currently flagged as 'disputed' for Staff / Manager review.
     """
-    assessments = DamageAssessment.query.filter_by(status="disputed").order_by(DamageAssessment.disputed_at.desc()).all()
+    assessments = (
+        DamageAssessment.query.filter_by(status="disputed")
+        .order_by(DamageAssessment.disputed_at.desc())
+        .all()
+    )
     results = []
     for a in assessments:
         r_dict = a.rental.to_dict() if a.rental else None
@@ -891,7 +980,6 @@ def list_disputes():
 @catalog_bp.post("/manager/disputes/<int:assessment_id>/override")
 @manager_required
 def manager_override_dispute(assessment_id):
-
     """
     FR020 & BR3: Only a manager can override or finalize a disputed deduction without
     an intermediate formal review state.
@@ -900,7 +988,9 @@ def manager_override_dispute(assessment_id):
     if not assessment:
         return jsonify({"error": "Assessment not found"}), 404
     if assessment.status != "disputed":
-        return jsonify({"error": f"Assessment is '{assessment.status}', not in disputed status"}), 400
+        return jsonify(
+            {"error": f"Assessment is '{assessment.status}', not in disputed status"}
+        ), 400
 
     data = request.get_json() or {}
     override_amount_val = data.get("override_amount")
@@ -962,16 +1052,19 @@ def manager_override_dispute(assessment_id):
         notify_dispute_resolved(rental, assessment)
     db.session.commit()
 
-    return jsonify({
-        "message": f"Dispute resolved. Final deduction adjusted to ₹{override_amount:,.2f}; net refund ₹{new_deposit_refund:,.2f} finalized.",
-        "assessment": assessment.to_dict(),
-        "rental": rental.to_dict() if rental else None,
-    }), 200
+    return jsonify(
+        {
+            "message": f"Dispute resolved. Final deduction adjusted to ₹{override_amount:,.2f}; net refund ₹{new_deposit_refund:,.2f} finalized.",
+            "assessment": assessment.to_dict(),
+            "rental": rental.to_dict() if rental else None,
+        }
+    ), 200
 
 
 # =========================================================
 # INCREMENT 5: IN-APP NOTIFICATIONS & MANAGER REPORTS (FR024–FR027)
 # =========================================================
+
 
 @catalog_bp.get("/notifications")
 @jwt_required_custom
@@ -988,10 +1081,12 @@ def get_notifications():
     unread_count = Notification.query.filter_by(
         user_id=g.customer_id, read=False
     ).count()
-    return jsonify({
-        "notifications": [n.to_dict() for n in notifications],
-        "unread_count": unread_count,
-    })
+    return jsonify(
+        {
+            "notifications": [n.to_dict() for n in notifications],
+            "unread_count": unread_count,
+        }
+    )
 
 
 @catalog_bp.post("/notifications/<int:notif_id>/read")
@@ -1002,7 +1097,9 @@ def mark_notification_read(notif_id):
     if not notif:
         return jsonify({"error": "Notification not found"}), 404
     if str(notif.user_id) != str(g.customer_id):
-        return jsonify({"error": "You do not have permission to access this notification"}), 403
+        return jsonify(
+            {"error": "You do not have permission to access this notification"}
+        ), 403
     notif.read = True
     db.session.commit()
     return jsonify({"message": "Marked as read", "notification": notif.to_dict()})
@@ -1034,12 +1131,20 @@ def manager_analytics():
     total_rental_fees = sum(float(r.total_price or 0.0) for r in rentals)
     total_damage_deductions = sum(float(a.damage_deduction or 0.0) for a in assessments)
     total_late_penalties = sum(float(a.late_penalty or 0.0) for a in assessments)
-    total_revenue = round(total_rental_fees + total_damage_deductions + total_late_penalties, 2)
+    total_revenue = round(
+        total_rental_fees + total_damage_deductions + total_late_penalties, 2
+    )
 
-    active_rentals = [r for r in rentals if (r.status or "").lower() in ("active", "checkedout")]
+    active_rentals = [
+        r for r in rentals if (r.status or "").lower() in ("active", "checkedout")
+    ]
     active_rentals_count = len(active_rentals)
-    total_deposits_held = round(sum(float(r.deposit_held or 0.0) for r in active_rentals), 2)
-    total_refunds_issued = round(sum(float(a.deposit_refunded or 0.0) for a in assessments), 2)
+    total_deposits_held = round(
+        sum(float(r.deposit_held or 0.0) for r in active_rentals), 2
+    )
+    total_refunds_issued = round(
+        sum(float(a.deposit_refunded or 0.0) for a in assessments), 2
+    )
 
     # Overdue rentals monitoring
     overdue_rentals_list = []
@@ -1050,20 +1155,30 @@ def manager_analytics():
                 due_at = due_at.replace(tzinfo=timezone.utc)
             if due_at < now:
                 overdue_sec = (now - due_at).total_seconds()
-                overdue_days = max(1, math.ceil((overdue_sec - 60) / 86400.0)) if overdue_sec > 60 else 0
+                overdue_days = (
+                    max(1, math.ceil((overdue_sec - 60) / 86400.0))
+                    if overdue_sec > 60
+                    else 0
+                )
                 if overdue_days > 0:
-                    overdue_rentals_list.append({
-                        "rental_id": r.id,
-                        "item_id": r.item_id,
-                        "item_name": r.item.name if r.item else f"Item #{r.item_id}",
-                        "sku": r.item.sku if r.item else None,
-                        "customer_id": r.customer_id,
-                        "checkout_at": r.checkout_at.isoformat() if r.checkout_at else None,
-                        "due_at": due_at.isoformat(),
-                        "overdue_days": overdue_days,
-                        "accrued_penalty": round(overdue_days * 500.0, 2),
-                        "deposit_held": float(r.deposit_held or 0.0),
-                    })
+                    overdue_rentals_list.append(
+                        {
+                            "rental_id": r.id,
+                            "item_id": r.item_id,
+                            "item_name": r.item.name
+                            if r.item
+                            else f"Item #{r.item_id}",
+                            "sku": r.item.sku if r.item else None,
+                            "customer_id": r.customer_id,
+                            "checkout_at": r.checkout_at.isoformat()
+                            if r.checkout_at
+                            else None,
+                            "due_at": due_at.isoformat(),
+                            "overdue_days": overdue_days,
+                            "accrued_penalty": round(overdue_days * 500.0, 2),
+                            "deposit_held": float(r.deposit_held or 0.0),
+                        }
+                    )
 
     # Most rented items ranking
     item_rental_counts = {}
@@ -1074,7 +1189,9 @@ def manager_analytics():
                     "item_id": r.item_id,
                     "name": r.item.name if r.item else f"Item #{r.item_id}",
                     "sku": r.item.sku if r.item else "N/A",
-                    "category": r.item.category.name if r.item and r.item.category else "General",
+                    "category": r.item.category.name
+                    if r.item and r.item.category
+                    else "General",
                     "rental_count": 0,
                     "total_earned": 0.0,
                 }
@@ -1107,23 +1224,27 @@ def manager_analytics():
         damage_by_category.values(), key=lambda x: x["total_damage_cost"], reverse=True
     )
 
-    return jsonify({
-        "summary": {
-            "total_revenue": total_revenue,
-            "total_rental_fees": round(total_rental_fees, 2),
-            "total_damage_deductions": round(total_damage_deductions, 2),
-            "total_late_penalties": round(total_late_penalties, 2),
-            "active_rentals_count": active_rentals_count,
-            "total_deposits_held": total_deposits_held,
-            "total_refunds_issued": total_refunds_issued,
-            "overdue_count": len(overdue_rentals_list),
-            "total_inventory_items": len(items),
-            "disputes_count": len([a for a in assessments if a.status == "disputed"]),
-        },
-        "most_rented_items": most_rented,
-        "damage_trends": damage_trends,
-        "overdue_rentals": overdue_rentals_list,
-    })
+    return jsonify(
+        {
+            "summary": {
+                "total_revenue": total_revenue,
+                "total_rental_fees": round(total_rental_fees, 2),
+                "total_damage_deductions": round(total_damage_deductions, 2),
+                "total_late_penalties": round(total_late_penalties, 2),
+                "active_rentals_count": active_rentals_count,
+                "total_deposits_held": total_deposits_held,
+                "total_refunds_issued": total_refunds_issued,
+                "overdue_count": len(overdue_rentals_list),
+                "total_inventory_items": len(items),
+                "disputes_count": len(
+                    [a for a in assessments if a.status == "disputed"]
+                ),
+            },
+            "most_rented_items": most_rented,
+            "damage_trends": damage_trends,
+            "overdue_rentals": overdue_rentals_list,
+        }
+    )
 
 
 @catalog_bp.get("/manager/reports/monthly-csv")
@@ -1136,46 +1257,50 @@ def manager_export_monthly_csv():
     writer = csv.writer(output)
 
     # Standard CSV headers
-    writer.writerow([
-        "Rental_ID",
-        "Booking_ID",
-        "Item_Name",
-        "SKU",
-        "Customer_ID",
-        "Checkout_Date",
-        "Due_Date",
-        "Returned_Date",
-        "Rental_Status",
-        "Rental_Fee_INR",
-        "Deposit_Held_INR",
-        "Damage_Type",
-        "Damage_Severity",
-        "Damage_Deduction_INR",
-        "Late_Penalty_INR",
-        "Net_Deposit_Refund_INR",
-    ])
+    writer.writerow(
+        [
+            "Rental_ID",
+            "Booking_ID",
+            "Item_Name",
+            "SKU",
+            "Customer_ID",
+            "Checkout_Date",
+            "Due_Date",
+            "Returned_Date",
+            "Rental_Status",
+            "Rental_Fee_INR",
+            "Deposit_Held_INR",
+            "Damage_Type",
+            "Damage_Severity",
+            "Damage_Deduction_INR",
+            "Late_Penalty_INR",
+            "Net_Deposit_Refund_INR",
+        ]
+    )
 
     rentals = Rental.query.order_by(Rental.created_at.desc()).all()
     for r in rentals:
         a = r.damage_assessment
-        writer.writerow([
-            r.id,
-            r.booking_id or "",
-            r.item.name if r.item else "",
-            r.item.sku if r.item else "",
-            r.customer_id or "",
-            r.checkout_at.strftime("%Y-%m-%d %H:%M") if r.checkout_at else "",
-            r.due_at.strftime("%Y-%m-%d %H:%M") if r.due_at else "",
-            r.returned_at.strftime("%Y-%m-%d %H:%M") if r.returned_at else "",
-            r.status,
-            f"{float(r.total_price or 0.0):.2f}",
-            f"{float(r.deposit_held or 0.0):.2f}",
-            a.damage_type.name if a and a.damage_type else "None",
-            a.severity if a and a.severity else "0",
-            f"{float(a.damage_deduction or 0.0):.2f}" if a else "0.00",
-            f"{float(a.late_penalty or 0.0):.2f}" if a else "0.00",
-            f"{float(a.deposit_refunded or 0.0):.2f}" if a else "0.00",
-        ])
+        writer.writerow(
+            [
+                r.id,
+                r.booking_id or "",
+                r.item.name if r.item else "",
+                r.item.sku if r.item else "",
+                r.customer_id or "",
+                r.checkout_at.strftime("%Y-%m-%d %H:%M") if r.checkout_at else "",
+                r.due_at.strftime("%Y-%m-%d %H:%M") if r.due_at else "",
+                r.returned_at.strftime("%Y-%m-%d %H:%M") if r.returned_at else "",
+                r.status,
+                f"{float(r.total_price or 0.0):.2f}",
+                f"{float(r.deposit_held or 0.0):.2f}",
+                a.damage_type.name if a and a.damage_type else "None",
+                a.severity if a and a.severity else "0",
+                f"{float(a.damage_deduction or 0.0):.2f}" if a else "0.00",
+                f"{float(a.late_penalty or 0.0):.2f}" if a else "0.00",
+                f"{float(a.deposit_refunded or 0.0):.2f}" if a else "0.00",
+            ]
+        )
 
     csv_data = output.getvalue()
     filename = f"gearvault_monthly_report_{utcnow().strftime('%Y_%m')}.csv"
@@ -1195,7 +1320,11 @@ def get_audit_logs():
     """
     SRS §5.3 & §6.1: Retrieves financial audit trail for all operations.
     """
-    logs = FinancialAuditLog.query.order_by(FinancialAuditLog.created_at.desc()).limit(50).all()
+    logs = (
+        FinancialAuditLog.query.order_by(FinancialAuditLog.created_at.desc())
+        .limit(50)
+        .all()
+    )
     return jsonify({"audit_logs": [log.to_dict() for log in logs]})
 
 
@@ -1214,7 +1343,11 @@ def escalate_overdue_rentals():
 
         for rental in overdue_rentals:
             rental.status = "presumed_lost"
-            replacement_val = float(rental.item.replacement_price) if rental.item and rental.item.replacement_price else 0.0
+            replacement_val = (
+                float(rental.item.replacement_price)
+                if rental.item and rental.item.replacement_price
+                else 0.0
+            )
             deposit_val = float(rental.deposit_held) if rental.deposit_held else 0.0
             refund = max(0.0, deposit_val - replacement_val)
 
@@ -1222,7 +1355,7 @@ def escalate_overdue_rentals():
             if not assessment:
                 assessment = DamageAssessment(
                     rental_id=rental.id,
-                    assessed_by="system_auto_escalation",
+                    assessed_by=None,
                     notes="Automated escalation: rental exceeded 7 days past due date (Presumed Lost, FR023).",
                     replacement_charge=Decimal(str(replacement_val)),
                     total_deduction=Decimal(str(replacement_val)),
@@ -1238,6 +1371,7 @@ def escalate_overdue_rentals():
 
             # Create notification
             from app.services.notification_service import send_notification
+
             item_name = rental.item.name if rental.item else "Equipment"
             send_notification(
                 user_id=rental.customer_id,
@@ -1251,15 +1385,14 @@ def escalate_overdue_rentals():
                 action="presumed_lost_charge",
                 amount=replacement_val,
                 user_id=rental.customer_id,
-                metadata={"rental_id": rental.id, "item_name": item_name, "days_overdue": 7},
+                metadata={
+                    "rental_id": rental.id,
+                    "item_name": item_name,
+                    "days_overdue": 7,
+                },
             )
 
         if overdue_rentals:
             db.session.commit()
     except Exception:
         db.session.rollback()
-
-
-
-
-

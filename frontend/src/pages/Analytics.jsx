@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api, getToken } from '../lib/api'
+import { getStoragePublicUrl, uploadStorageFile } from '../lib/storage'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -22,6 +23,13 @@ ChartJS.register(
   Legend
 )
 
+const getItemImageUrl = imagePath => {
+  if (!imagePath) return null
+  if (/^https?:\/\//i.test(imagePath)) return imagePath
+
+  return getStoragePublicUrl(imagePath)
+}
+
 export default function Analytics() {
   const [data, setData] = useState(null)
   const [disputes, setDisputes] = useState([])
@@ -42,6 +50,7 @@ export default function Analytics() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [submittingItem, setSubmittingItem] = useState(false)
   const [togglingItemId, setTogglingItemId] = useState(null)
+  const [newItemImageFile, setNewItemImageFile] = useState(null)
   const [newItemForm, setNewItemForm] = useState({
     name: '',
     sku: '',
@@ -50,7 +59,7 @@ export default function Analytics() {
     replacement_price: '',
     purchase_date: new Date().toISOString().slice(0, 10),
     description: '',
-    image_path: '/images/items/camera.svg',
+    image_path: 'camera.svg',
   })
 
   // Financial Audit Trail state (SRS §5.3, §6.1)
@@ -141,6 +150,9 @@ export default function Analytics() {
     setActionMessage('')
 
     try {
+      const uploadedImage = newItemImageFile
+        ? await uploadStorageFile(newItemImageFile, 'items')
+        : null
       const payload = {
         name: newItemForm.name.trim(),
         sku: newItemForm.sku.trim(),
@@ -149,7 +161,7 @@ export default function Analytics() {
         replacement_price: Number(newItemForm.replacement_price),
         purchase_date: newItemForm.purchase_date,
         description: newItemForm.description.trim() || undefined,
-        image_path: newItemForm.image_path.trim() || undefined,
+        image_path: uploadedImage?.path || newItemForm.image_path.trim() || undefined,
       }
 
       const res = await api('/items', {
@@ -159,6 +171,7 @@ export default function Analytics() {
 
       setActionMessage(res.message || `Equipment '${newItemForm.name}' added successfully!`)
       setShowAddModal(false)
+      setNewItemImageFile(null)
       setNewItemForm({
         name: '',
         sku: '',
@@ -167,7 +180,7 @@ export default function Analytics() {
         replacement_price: '',
         purchase_date: new Date().toISOString().slice(0, 10),
         description: '',
-        image_path: '/images/items/camera.svg',
+        image_path: 'camera.svg',
       })
 
       // Refresh fleet and analytics
@@ -489,10 +502,13 @@ export default function Analytics() {
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <img
-                              src={item.image_path || '/images/items/camera.svg'}
+                              src={getItemImageUrl(item.image_path || 'camera.svg')}
                               alt=""
                               style={{ width: 34, height: 34, borderRadius: 6, objectFit: 'contain', background: '#f1f5f9', padding: 2 }}
-                              onError={(e) => { e.currentTarget.src = '/images/items/camera.svg' }}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null
+                                e.currentTarget.src = getItemImageUrl('camera.svg')
+                              }}
                             />
                             <div>
                               <strong>{item.name}</strong>
@@ -997,17 +1013,15 @@ export default function Analytics() {
                   />
                 </div>
                 <div className="form-row">
-                  <label>Catalog Image Path / Icon</label>
-                  <select
-                    value={newItemForm.image_path}
-                    onChange={e => setNewItemForm({ ...newItemForm, image_path: e.target.value })}
-                  >
-                    <option value="/images/items/camera.svg">📷 Camera Icon (/images/items/camera.svg)</option>
-                    <option value="/images/items/lens.svg">🔍 Lens Icon (/images/items/lens.svg)</option>
-                    <option value="/images/items/drone.svg">🛸 Drone Icon (/images/items/drone.svg)</option>
-                    <option value="/images/items/lighting.svg">💡 Lighting Icon (/images/items/lighting.svg)</option>
-                    <option value="/images/items/audio.svg">🎙️ Audio Icon (/images/items/audio.svg)</option>
-                  </select>
+                  <label>Equipment Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setNewItemImageFile(e.target.files?.[0] || null)}
+                  />
+                  <p className="muted small" style={{ margin: '4px 0 0' }}>
+                    {newItemImageFile ? newItemImageFile.name : 'Optional. Uses the default catalog image when empty.'}
+                  </p>
                 </div>
               </div>
 
