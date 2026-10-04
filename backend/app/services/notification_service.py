@@ -13,6 +13,7 @@ def send_notification(
     notif_type: str,
     title: str,
     message: str,
+    payload: Optional[dict] = None,
 ) -> Optional[Notification]:
     """Creates an in-app notification record for the target user."""
     if not user_id or not title:
@@ -22,6 +23,7 @@ def send_notification(
         type=notif_type,
         title=title,
         message=message,
+        payload=payload,
         read=False,
     )
     db.session.add(notif)

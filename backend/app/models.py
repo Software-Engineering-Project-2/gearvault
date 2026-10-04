@@ -100,7 +100,7 @@ class Item(db.Model):
     purchase_date = db.Column(db.Date, nullable=True)
     replacement_price = db.Column(db.Numeric(12, 2), nullable=False)
     category_id = db.Column(
-        db.Integer, db.ForeignKey("item_categories.id"), nullable=True, index=True
+        db.Integer, db.ForeignKey("item_categories.id", ondelete="SET NULL"), nullable=True, index=True
     )
     active = db.Column(db.Boolean, nullable=True, default=True)
     created_at = db.Column(
@@ -141,12 +141,15 @@ class Item(db.Model):
 
 class Booking(db.Model):
     __tablename__ = "bookings"
+    __table_args__ = (
+        db.Index("bookings_item_period_idx", "item_id", "start_ts", "end_ts"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(
-        db.String(36), db.ForeignKey("users.id"), nullable=False, index=True
+        db.String(36), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     item_id = db.Column(
-        db.Integer, db.ForeignKey("items.id"), nullable=False, index=True
+        db.Integer, db.ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True
     )
     start_ts = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     end_ts = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
@@ -199,12 +202,15 @@ class Booking(db.Model):
 
 class Rental(db.Model):
     __tablename__ = "rentals"
-    id = db.Column(db.Integer, primary_key=True)
-    booking_id = db.Column(db.Integer, db.ForeignKey("bookings.id"), nullable=True)
-    item_id = db.Column(
-        db.Integer, db.ForeignKey("items.id"), nullable=True, index=True
+    __table_args__ = (
+        db.Index("rentals_item_due_idx", "item_id", "due_at"),
     )
-    customer_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
+    id = db.Column(db.Integer, primary_key=True)
+    booking_id = db.Column(db.Integer, db.ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
+    item_id = db.Column(
+        db.Integer, db.ForeignKey("items.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    customer_id = db.Column(db.String(36), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     checkout_at = db.Column(db.DateTime(timezone=True), nullable=True)
     due_at = db.Column(db.DateTime(timezone=True), nullable=True)
     returned_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -244,10 +250,10 @@ class Payment(db.Model):
     __tablename__ = "payments"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
-        db.String(36), db.ForeignKey("users.id"), nullable=False, index=True
+        db.String(36), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     rental_id = db.Column(
-        db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True
+        db.Integer, db.ForeignKey("rentals.id", ondelete="SET NULL"), nullable=True, index=True
     )
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     payment_type = db.Column(db.String(50), nullable=False, default="deposit")
@@ -272,12 +278,12 @@ class ItemConditionLog(db.Model):
     __tablename__ = "item_condition_log"
     id = db.Column(db.Integer, primary_key=True)
     item_id = db.Column(
-        db.Integer, db.ForeignKey("items.id"), nullable=False, index=True
+        db.Integer, db.ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True
     )
     rental_id = db.Column(
-        db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True
+        db.Integer, db.ForeignKey("rentals.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    captured_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
+    captured_by = db.Column(db.String(36), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     photo_url = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     captured_at = db.Column(
@@ -314,13 +320,16 @@ class DamageType(db.Model):
 
 class DamageAssessment(db.Model):
     __tablename__ = "damage_assessments"
+    __table_args__ = (
+        db.CheckConstraint("severity >= 1 AND severity <= 5", name="ck_damage_assessment_severity"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     rental_id = db.Column(
-        db.Integer, db.ForeignKey("rentals.id"), nullable=False, unique=True, index=True
+        db.Integer, db.ForeignKey("rentals.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
     )
-    assessed_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
+    assessed_by = db.Column(db.String(36), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     damage_type_id = db.Column(
-        db.Integer, db.ForeignKey("damage_types.id"), nullable=True, index=True
+        db.Integer, db.ForeignKey("damage_types.id", ondelete="SET NULL"), nullable=True, index=True
     )
     severity = db.Column(db.Integer, nullable=True)  # 1 to 5
     notes = db.Column(db.Text, nullable=True)
@@ -391,11 +400,12 @@ class Notification(db.Model):
     __tablename__ = "notifications"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
-        db.String(36), db.ForeignKey("users.id"), nullable=False, index=True
+        db.String(36), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     message = db.Column(db.Text, nullable=False)
+    payload = db.Column(db.JSON, nullable=True)
     read = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -408,6 +418,7 @@ class Notification(db.Model):
             "type": self.type,
             "title": self.title,
             "message": self.message,
+            "payload": self.payload,
             "read": self.read,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -417,7 +428,7 @@ class FinancialAuditLog(db.Model):
     __tablename__ = "financial_audit_log"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(
-        db.String(36), db.ForeignKey("users.id"), nullable=True, index=True
+        db.String(36), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     action = db.Column(db.Text, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=True)

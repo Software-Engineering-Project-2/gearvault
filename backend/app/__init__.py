@@ -15,40 +15,40 @@ load_dotenv()
 def create_app(test_config=None):
     app = Flask(__name__)
 
-    # Default configuration
-    use_external = (
-        os.getenv("USE_EXTERNAL_DATABASE", "false").strip().lower()
-        in ("true", "1", "yes")
-    )
-    database_url = (
-        (
-            os.getenv("DATABASE_POOLER_URL", "").strip()
-            or os.getenv("DATABASE_URL", "").strip()
+    if test_config:
+        app.config.update(test_config)
+
+    is_testing = app.config.get("TESTING") or os.getenv("TESTING", "").lower() in ("true", "1", "yes")
+    if is_testing:
+        app.config["TESTING"] = True
+        app.config.setdefault("SQLALCHEMY_DATABASE_URI", "sqlite:///:memory:")
+    else:
+        database_url = (
+            os.getenv("DATABASE_URL", "").strip()
+            or os.getenv("DATABASE_POOLER_URL", "").strip()
         )
-        if use_external
-        else ""
-    )
-    # Prefer PostgreSQL from env if external DB enabled; keep SQLite for seamless local development.
-    if database_url:
+        if not database_url:
+            raise RuntimeError(
+                "DATABASE_URL or DATABASE_POOLER_URL environment variable is required."
+            )
         normalized_db_url = database_url.replace("postgres://", "postgresql://", 1)
         if (
             normalized_db_url.startswith("postgresql://")
             and "sslmode=" not in normalized_db_url
+            and "localhost" not in normalized_db_url
+            and "127.0.0.1" not in normalized_db_url
+            and "postgres" not in normalized_db_url
         ):
             separator = "&" if "?" in normalized_db_url else "?"
             normalized_db_url = f"{normalized_db_url}{separator}sslmode=require"
         app.config["SQLALCHEMY_DATABASE_URI"] = normalized_db_url
-    else:
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///gearvault.db"
+
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["JWT_SECRET_KEY"] = os.getenv(
         "JWT_SECRET_KEY", "gearvault-default-jwt-secret-key"
     )
     jwt_expiry_minutes = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60"))
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=jwt_expiry_minutes)
-
-    if test_config:
-        app.config.update(test_config)
 
     # Initialize extensions
     db.init_app(app)
@@ -57,68 +57,22 @@ def create_app(test_config=None):
     bcrypt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
 
+    # Register CLI commands
+    from app.cli import seed_command, seed_canonical_data
+    app.cli.add_command(seed_command)
+
     # Register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(catalog_bp)
 
-    with app.app_context():
-        try:
-            db.create_all()
-            from app.models import DamageType, Role, User
-
-            # Ensure canonical roles exist
-            role_definitions = [
-                (1, "customer"),
-                (2, "staff"),
-                (3, "manager"),
-            ]
-            for r_id, r_name in role_definitions:
-                existing_role = db.session.get(Role, r_id) or Role.query.filter_by(name=r_name).first()
-                if not existing_role:
-                    db.session.add(Role(id=r_id, name=r_name))
-            db.session.commit()
-
-            # Ensure development users exist for manual RBAC testing
-            dev_password = os.getenv("DEV_USERS_PASSWORD", "DevPassword123!")
-            dev_users = [
-                ("customer@test.com", "Customer Test User", 1),
-                ("staff@test.com", "Staff Test User", 2),
-                ("manager@test.com", "Manager Test User", 3),
-            ]
-            for email, full_name, role_id in dev_users:
-                user = User.query.filter_by(email=email).first()
-                if not user:
-                    user = User(email=email, full_name=full_name, role_id=role_id)
-                    user.set_password(dev_password)
-                    db.session.add(user)
-                else:
-                    # Maintain correct role assignment
-                    user.role_id = role_id
-                    user.set_password(dev_password)
-            db.session.commit()
-
-            if DamageType.query.count() == 0:
-                defaults = [
-                    DamageType(
-                        name="Cosmetic",
-                        weight=0.05,
-                        description="Surface scratches, scuffs, minor cosmetic wear not affecting functionality.",
-                    ),
-                    DamageType(
-                        name="Functional",
-                        weight=0.20,
-                        description="Partial impairment, broken switch/mount, requires servicing.",
-                    ),
-                    DamageType(
-                        name="Major/Total Loss",
-                        weight=1.00,
-                        description="Complete device failure, shattered sensor/glass, water submersion, or total destruction.",
-                    ),
-                ]
-                db.session.add_all(defaults)
-                db.session.commit()
-        except Exception as e:
-            app.logger.warning(f"Database bootstrap notice: {e}")
+    # In testing mode only, automatically set up in-memory tables and canonical roles
+    if app.config.get("TESTING"):
+        with app.app_context():
+            try:
+                db.create_all()
+                seed_canonical_data()
+            except Exception as e:
+                app.logger.warning(f"Test database setup notice: {e}")
 
 
     # Expire holds even when no customer is currently browsing the catalog.
@@ -128,9 +82,12 @@ def create_app(test_config=None):
 
         def hold_expiry_worker():
             while True:
-                with app.app_context():
-                    expire_holds()
-                    escalate_overdue_rentals()
+                try:
+                    with app.app_context():
+                        expire_holds()
+                        escalate_overdue_rentals()
+                except Exception:
+                    pass
                 threading.Event().wait(60)
 
         threading.Thread(

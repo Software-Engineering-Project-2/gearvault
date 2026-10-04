@@ -144,8 +144,8 @@ export default function NotificationBell() {
                 >
                   <div className="notif-icon">{getIcon(n.type)}</div>
                   <div className="notif-body">
-                    <div className="notif-title">{n.title}</div>
-                    <div className="notif-message">{n.message}</div>
+                    <div className="notif-title">{n.title || n.payload?.title}</div>
+                    <div className="notif-message">{n.message || n.payload?.message}</div>
                     <div className="notif-time">{formatTime(n.created_at)}</div>
                   </div>
                   {!n.read && <div className="notif-unread-dot" />}
