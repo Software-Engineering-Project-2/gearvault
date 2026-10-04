@@ -122,20 +122,22 @@ class Item(db.Model):
         daily_rate = get_item_daily_rate(
             self.purchase_price, self.purchase_date, category_name=cat_name
         )
+        # In production, MEDIA_BASE_URL will be set to e.g. "https://<domain>/media" (CloudFront CDN)
         media_base = (os.getenv("MEDIA_BASE_URL") or "").rstrip("/")
         image_url = None
         if self.image_path:
-            if self.image_path.startswith("http://") or self.image_path.startswith("https://"):
-                image_url = self.image_path
+            key = self.image_path
+            if key.startswith("http://") or key.startswith("https://"):
+                image_url = key
             elif media_base:
-                image_url = f"{media_base}/{self.image_path.lstrip('/')}"
+                image_url = media_base.rstrip("/") + "/" + key.lstrip("/")
             else:
                 endpoint = (os.getenv("S3_ENDPOINT_URL") or "").rstrip("/")
                 bucket = os.getenv("S3_BUCKET", "gearvault-media")
                 if endpoint:
-                    image_url = f"{endpoint}/{bucket}/{self.image_path.lstrip('/')}"
+                    image_url = f"{endpoint}/{bucket}/{key.lstrip('/')}"
                 else:
-                    image_url = f"https://{bucket}.s3.amazonaws.com/{self.image_path.lstrip('/')}"
+                    image_url = f"https://{bucket}.s3.amazonaws.com/{key.lstrip('/')}"
 
         return {
             "id": self.id,
