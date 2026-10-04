@@ -1,109 +1,133 @@
 # GearVault
 
-GearVault is an equipment rental management app for browsing inventory, checking availability across a time window, and placing temporary booking holds before payment confirmation.
+GearVault is an equipment rental management application for browsing inventory, checking availability across dynamic time windows, reserving equipment with soft holds, managing counter handovers/returns with condition logging and damage assessment, and exporting manager analytics.
 
-## Current project scope
+## Runtime Requirements
 
-The repository now includes both the backend service and the React frontend for the rental workflow:
+- **Python**: `3.13` (Pinned in backend Dockerfile and development setup)
+- **Node.js**: `20` (Pinned in `.nvmrc` and frontend development setup)
 
-- Catalog browsing with category filters and keyword search
-- Availability checking for a selected date/time range
-- Booking holds with automatic expiry after 15 minutes
-- Booking confirmation after payment
-- Cancellation of active holds before checkout
-- Customer-specific booking history
-- Flask API with SQLite default database and optional external database support
-- Frontend pages for login, signup, catalog dashboard, bookings, checkout, and staff operations
+---
 
-## Project structure
+## Architecture Overview
 
-- [backend](backend) — Flask API and core rental logic
-- [frontend](frontend) — Vite + React app
-- [docs/session-log-increment-3.md](docs/session-log-increment-3.md) — Increment 3 checkout, staff, & theming documentation
-- [docs/supabase-setup.md](docs/supabase-setup.md) — Supabase auth and database setup notes
-- [frontend/sql/supabase_schema_with_rls.sql](frontend/sql/supabase_schema_with_rls.sql) — Supabase schema and RLS definitions
+- **Frontend**: React + Vite (SPA) with Tailwind CSS, Chart.js, and Lucide icons.
+- **Backend**: Flask 3.1, SQLAlchemy 2.0, Alembic (Flask-Migrate), Flask-JWT-Extended, Flask-Limiter, Marshmallow, and Gunicorn WSGI.
+- **Database**: PostgreSQL 16 (single source of truth with UUID users table and strict RBAC).
+- **Object Storage**: S3-compatible storage (MinIO locally / AWS S3 + CloudFront in production) using presigned upload and download flows.
+- **Zero Third-Party Auth Lock-In**: Standalone Flask auth and PostgreSQL database with no Supabase dependency.
 
-## Backend features
+---
 
-The Flask backend exposes catalog, booking, and staff endpoints under `/api`:
+## Project Structure
 
-- `GET /api/categories` — returns all active item categories
-- `GET /api/items` — lists catalog items, supports `search`, `category_id`, `start_ts`, and `end_ts`
-- `POST /api/bookings/hold` — creates a time-bound hold for an item, with overlap checks and expiry handling
-- `GET /api/bookings/<id>` — retrieves individual booking details
-- `POST /api/bookings/<id>/confirm-payment` — confirms a held booking and records payment transaction
-- `DELETE /api/bookings/<id>` — cancels a held booking
-- `GET /api/bookings/mine` — returns bookings for the logged-in customer
-- `GET /api/staff/bookings/confirmed` — returns confirmed bookings ready for equipment pickup
-- `GET /api/staff/rentals/active` — returns all equipment currently out on rental
-- `POST /api/staff/bookings/<id>/handover` — processes checkout handover and activates rental (with optional condition logging)
+```text
+├── backend/
+│   ├── app/
+│   │   ├── routes/        # Auth, Catalog/Bookings, Uploads, Health
+│   │   ├── services/      # Pricing engine, Damage engine, S3 storage service, Audit, Notifications
+│   │   ├── cli.py         # Custom CLI commands (flask seed)
+│   │   ├── config.py      # Environment configuration classes
+│   │   ├── jobs.py        # Background jobs (flask jobs run)
+│   │   ├── models.py      # SQLAlchemy ORM models (single source of truth)
+│   │   ├── rbac.py        # JWT decorators and role enforcement
+│   │   └── schemas.py     # Marshmallow request schemas
+│   ├── migrations/        # Single Alembic baseline migration
+│   ├── tests/             # Unit and integration test suite
+│   ├── Dockerfile         # Python 3.13-slim non-root production container
+│   ├── gunicorn.conf.py   # WSGI configuration with worker tuning and stdout logging
+│   ├── requirements.txt   # Pinned Python dependencies
+│   └── wsgi.py            # Gunicorn entrypoint
+├── frontend/
+│   ├── src/               # React components, pages, context, and storage adapter
+│   ├── package.json       # React dependencies and build scripts
+│   └── vite.config.js     # Vite configuration
+├── docker-compose.yml     # Local parity stack (Postgres 16, MinIO, Backend, Seed)
+├── .nvmrc                 # Node version pin (v20)
+└── README.md
+```
 
+---
 
-The backend also enforces booking rules:
+## Quick Start with Docker Compose
 
-- overlapping bookings are blocked
-- active rental periods are treated as unavailable
-- holds expire automatically after 15 minutes if not confirmed
-- start/end windows must be valid and future-dated
+To run the complete production-parity stack locally (PostgreSQL 16, MinIO S3, and Flask backend):
 
-## Frontend features
+```bash
+docker compose up --build
+```
 
-The React app includes:
+Services exposed:
+- **Flask Backend API**: `http://localhost:5000`
+- **Health Check**: `http://localhost:5000/api/health`
+- **MinIO Console**: `http://localhost:9001` (`minioadmin` / `minioadmin`)
+- **MinIO S3 API**: `http://localhost:9000`
+- **PostgreSQL**: `localhost:5432`
 
-- `Login` and `Signup` pages
-- `Dashboard` page for catalog browsing and item availability by date range
-- `Bookings` page to view user bookings and confirm or cancel holds
-- client-side validation before creating a booking hold
-- booking status messaging and hold expiry details
+To run database migrations and seed canonical catalog data in one command:
+```bash
+docker compose run --rm migrate-seed
+```
 
-## Local setup
+---
 
-### 1. Backend
+## Manual Local Development Setup
+
+### 1. Backend Setup (Python 3.13)
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv venv
+# Linux / macOS:
+source venv/bin/activate
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+
 pip install -r requirements.txt
-cp .env.example .env        # Windows (PowerShell): Copy-Item .env.example .env
-# update .env with your real PostgreSQL connection URL(s)
-python run.py
+cp .env.example .env
 ```
 
-The backend .env.example already includes PostgreSQL placeholders:
-
-- DATABASE_POOLER_URL=postgresql://... (recommended)
-- DATABASE_URL=postgresql://... (direct DB fallback)
-
-The app uses PostgreSQL when DATABASE_POOLER_URL (recommended) or DATABASE_URL is set. If neither is set, it falls back to local SQLite (sqlite:///gearvault.db).
-
-Optional environment variables:
-
+Apply migrations and seed initial data:
 ```bash
-export DATABASE_URL="postgresql://..."
-export DATABASE_POOLER_URL="postgresql://..."
-export JWT_SECRET_KEY="your-secret-key"
-export SUPABASE_URL="https://your-project.supabase.co"
-export SUPABASE_ANON_KEY="your-anon-key"
+flask db upgrade
+flask seed
 ```
 
-### 2. Frontend
+Run background maintenance jobs (soft-hold expiry and overdue escalation):
+```bash
+flask jobs run
+```
+
+Run tests:
+```bash
+python -m unittest discover tests
+```
+
+Start the backend:
+```bash
+# Development:
+python -m flask run --port 5000
+# Production WSGI (Linux/Docker):
+gunicorn --config gunicorn.conf.py wsgi:app
+```
+
+### 2. Frontend Setup (Node 20)
 
 ```bash
 cd frontend
+nvm use 20
 npm install
-cp env.example .env
-# update .env with your Supabase values
 npm run dev
 ```
 
-## Security notes
+Build production static assets (`dist/`):
+```bash
+npm run build
+```
 
-- Do not commit `.env` files or keys
-- Use the Supabase anonymous key only in the frontend
-- Keep the service role key and any admin secrets on the server side only
+---
 
-## Useful references
+## Health & Monitoring Probes
 
-- [frontend/README.md](frontend/README.md)
-- [docs/supabase-setup.md](docs/supabase-setup.md)
+- `GET /api/health` — Liveness probe (returns 200 without database access)
+- `GET /api/health/ready` — Readiness probe (validates PostgreSQL connectivity)

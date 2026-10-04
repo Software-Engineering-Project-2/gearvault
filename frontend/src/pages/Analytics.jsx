@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api, getToken } from '../lib/api'
+import { api, getToken, API_URL } from '../lib/api'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -48,7 +48,6 @@ export default function Analytics() {
   const handleExportCsv = async () => {
     setExporting(true)
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
       const token = getToken()
       const response = await fetch(`${API_URL}/manager/reports/monthly-csv`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

@@ -1,0 +1,108 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gearvault-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gearvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gearvault_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-gearvault}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gearvault} -d ${POSTGRES_DB:-gearvault}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: gearvault-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: gearvault-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb --ignore-existing local/${S3_BUCKET:-gearvault-media};
+      /usr/bin/mc anonymous set download local/${S3_BUCKET:-gearvault-media}/items;
+      exit 0;
+      "
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gearvault-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gearvault}:${POSTGRES_PASSWORD:-gearvault_dev_password}@postgres:5432/${POSTGRES_DB:-gearvault}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-gearvault-dev-insecure-jwt-secret-key-32ch}
+      JWT_ACCESS_TOKEN_EXPIRES_MINUTES: "60"
+      S3_BUCKET: ${S3_BUCKET:-gearvault-media}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
+      LOG_LEVEL: INFO
+      WEB_CONCURRENCY: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    command: >
+      /bin/sh -c "
+      flask db upgrade &&
+      exec gunicorn --config gunicorn.conf.py wsgi:app
+      "
+
+  migrate-seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gearvault-migrate-seed
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gearvault}:${POSTGRES_PASSWORD:-gearvault_dev_password}@postgres:5432/${POSTGRES_DB:-gearvault}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-gearvault-dev-insecure-jwt-secret-key-32ch}
+      SEED_DEV_USERS: "true"
+      DEV_USERS_PASSWORD: ${DEV_USERS_PASSWORD:-password123}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      /bin/sh -c "
+      flask db upgrade &&
+      flask seed &&
+      exit 0
+      "
+
+volumes:
+  postgres_data:
+  minio_data:
