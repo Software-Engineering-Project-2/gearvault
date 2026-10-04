@@ -44,8 +44,20 @@ def create_app(test_config=None):
     )
     app.logger.setLevel(log_level)
 
-    # Reverse proxy middleware for correct IP / scheme behind ALB / CloudFront
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+    # Reverse proxy middleware for correct IP / scheme behind ALB / CloudFront (CloudFront + ALB = 2 hops)
+    x_for = int(os.getenv("PROXY_FIX_FOR", "2"))
+    x_proto = int(os.getenv("PROXY_FIX_PROTO", "1"))
+    x_host = int(os.getenv("PROXY_FIX_HOST", "1"))
+    x_port = int(os.getenv("PROXY_FIX_PORT", "1"))
+    x_prefix = int(os.getenv("PROXY_FIX_PREFIX", "1"))
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=x_for,
+        x_proto=x_proto,
+        x_host=x_host,
+        x_port=x_port,
+        x_prefix=x_prefix,
+    )
 
     if is_testing:
         app.config["TESTING"] = True
