@@ -95,7 +95,7 @@ class Item(db.Model):
     sku = db.Column(db.Text, unique=True, nullable=True)
     name = db.Column(db.String(255), nullable=False, index=True)
     description = db.Column(db.Text)
-    # Path within the Supabase Storage bucket, not a full URL.
+    # Path/key within the S3/MinIO object storage bucket, not a full URL.
     image_path = db.Column(db.Text, nullable=True)
     purchase_price = db.Column(db.Numeric(12, 2), nullable=False)
     purchase_date = db.Column(db.Date, nullable=True)
