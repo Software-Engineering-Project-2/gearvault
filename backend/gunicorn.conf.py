@@ -1,7 +1,8 @@
 import os
 
 # Server socket
-bind = os.getenv("BIND", "0.0.0.0:5000")
+port = os.getenv("PORT", "5000")
+bind = os.getenv("BIND", f"0.0.0.0:{port}")
 backlog = 2048
 
 # Worker processes
