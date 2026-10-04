@@ -1,5 +1,4 @@
 import os
-import threading
 from datetime import timedelta
 
 from dotenv import load_dotenv
@@ -59,7 +58,9 @@ def create_app(test_config=None):
 
     # Register CLI commands
     from app.cli import seed_command, seed_canonical_data
+    from app.jobs import jobs_cli
     app.cli.add_command(seed_command)
+    app.cli.add_command(jobs_cli)
 
     # Register blueprints
     from app.routes.uploads import uploads_bp
@@ -75,26 +76,6 @@ def create_app(test_config=None):
                 seed_canonical_data()
             except Exception as e:
                 app.logger.warning(f"Test database setup notice: {e}")
-
-
-    # Expire holds even when no customer is currently browsing the catalog.
-    # Database checks in the booking endpoints remain the final race-safe guard.
-    if not app.config.get("TESTING"):
-        from app.routes.catalog import expire_holds, escalate_overdue_rentals
-
-        def hold_expiry_worker():
-            while True:
-                try:
-                    with app.app_context():
-                        expire_holds()
-                        escalate_overdue_rentals()
-                except Exception:
-                    pass
-                threading.Event().wait(60)
-
-        threading.Thread(
-            target=hold_expiry_worker, name="hold-expiry-and-escalation", daemon=True
-        ).start()
 
     @app.route("/")
     def index():

@@ -79,17 +79,7 @@ def parse_time(value):
     )
 
 
-def expire_holds():
-    """FR024: Auto-expire unpaid soft holds after 15 minutes and notify customers."""
-    expired_bookings = Booking.query.filter(
-        func.lower(Booking.status) == BOOKING_STATUS_HELD.lower(),
-        Booking.hold_expires_at <= utcnow(),
-    ).all()
-    if expired_bookings:
-        for b in expired_bookings:
-            b.status = BOOKING_STATUS_EXPIRED
-            notify_hold_expired(b)
-        db.session.commit()
+from app.jobs import expire_holds, escalate_overdue_rentals
 
 
 def has_overlap(item_id, start, end):
@@ -1332,71 +1322,3 @@ def get_audit_logs():
     return jsonify({"audit_logs": [log.to_dict() for log in logs]})
 
 
-def escalate_overdue_rentals():
-    """
-    SRS FR023 & BR4: Automatically flags rentals overdue past 7 days as 'presumed_lost',
-    charging full replacement price against deposit and creating audit logs.
-    """
-    try:
-        now = utcnow()
-        threshold = now - timedelta(days=7)
-        overdue_rentals = Rental.query.filter(
-            func.lower(Rental.status) == "active",
-            Rental.due_at <= threshold,
-        ).all()
-
-        for rental in overdue_rentals:
-            rental.status = "presumed_lost"
-            replacement_val = (
-                float(rental.item.replacement_price)
-                if rental.item and rental.item.replacement_price
-                else 0.0
-            )
-            deposit_val = float(rental.deposit_held) if rental.deposit_held else 0.0
-            refund = max(0.0, deposit_val - replacement_val)
-
-            assessment = DamageAssessment.query.filter_by(rental_id=rental.id).first()
-            if not assessment:
-                assessment = DamageAssessment(
-                    rental_id=rental.id,
-                    assessed_by=None,
-                    notes="Automated escalation: rental exceeded 7 days past due date (Presumed Lost, FR023).",
-                    replacement_charge=Decimal(str(replacement_val)),
-                    total_deduction=Decimal(str(replacement_val)),
-                    deposit_refunded=Decimal(str(refund)),
-                    status="finalized",
-                )
-                db.session.add(assessment)
-            else:
-                assessment.replacement_charge = Decimal(str(replacement_val))
-                assessment.total_deduction = Decimal(str(replacement_val))
-                assessment.deposit_refunded = Decimal(str(refund))
-                assessment.status = "finalized"
-
-            # Create notification
-            from app.services.notification_service import send_notification
-
-            item_name = rental.item.name if rental.item else "Equipment"
-            send_notification(
-                user_id=rental.customer_id,
-                notif_type="presumed_lost",
-                title=f"Equipment Presumed Lost — {item_name}",
-                message=f"Your rental for {item_name} is more than 7 days overdue and has been escalated to Presumed Lost. A full replacement charge of ₹{replacement_val:,.2f} has been deducted from your security deposit.",
-            )
-
-            # Record audit log
-            log_financial_action(
-                action="presumed_lost_charge",
-                amount=replacement_val,
-                user_id=rental.customer_id,
-                metadata={
-                    "rental_id": rental.id,
-                    "item_name": item_name,
-                    "days_overdue": 7,
-                },
-            )
-
-        if overdue_rentals:
-            db.session.commit()
-    except Exception:
-        db.session.rollback()
