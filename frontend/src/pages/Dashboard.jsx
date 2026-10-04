@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, getUser } from '../lib/api'
-import { supabase } from '../lib/supabaseClient'
+import { getStoragePublicUrl } from '../lib/storage'
 
 const localInputValue = date => {
   const pad = value => String(value).padStart(2, '0')
@@ -14,15 +14,7 @@ const futureLocal = hours => {
 }
 const toIso = value => new Date(value).toISOString()
 
-const getItemImageUrl = imagePath => {
-  if (!imagePath) return null
-  if (/^https?:\/\//i.test(imagePath)) return imagePath
-
-  const bucket = import.meta.env.VITE_SUPABASE_ITEMS_BUCKET || 'item-images'
-  const path = imagePath.replace(/^\/+/, '')
-  const storagePath = path.startsWith(`${bucket}/`) ? path.slice(bucket.length + 1) : path
-  return supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
-}
+const getItemImageUrl = imagePath => getStoragePublicUrl(imagePath)
 
 export default function Dashboard() {
   const [user] = useState(getUser())

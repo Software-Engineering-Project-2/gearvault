@@ -62,8 +62,10 @@ def create_app(test_config=None):
     app.cli.add_command(seed_command)
 
     # Register blueprints
+    from app.routes.uploads import uploads_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(catalog_bp)
+    app.register_blueprint(uploads_bp)
 
     # In testing mode only, automatically set up in-memory tables and canonical roles
     if app.config.get("TESTING"):

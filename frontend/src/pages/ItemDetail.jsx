@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { api, getUser } from '../lib/api'
 import SignInPromptModal from '../components/SignInPromptModal'
-import { supabase } from '../lib/supabaseClient'
+import { getStoragePublicUrl } from '../lib/storage'
 
 const localInputValue = date => {
   const pad = value => String(value).padStart(2, '0')
@@ -23,20 +23,7 @@ const toLocalDateTimeValue = value => {
   return Number.isNaN(date.getTime()) ? value : localInputValue(date)
 }
 
-const getItemImageUrl = imagePath => {
-  if (!imagePath) return null
-  if (/^https?:\/\//i.test(imagePath)) return imagePath
-
-  const bucket = import.meta.env.VITE_SUPABASE_ITEMS_BUCKET || 'item-images'
-  // Existing rows may include the bucket name (for example,
-  // "product_images/camera.png"). Storage APIs expect a path inside the bucket.
-  const bucketPrefix = `${bucket}/`
-  const storagePath = imagePath.replace(/^\/+/, '').startsWith(bucketPrefix)
-    ? imagePath.replace(/^\/+/, '').slice(bucketPrefix.length)
-    : imagePath.replace(/^\/+/, '')
-
-  return supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
-}
+const getItemImageUrl = imagePath => getStoragePublicUrl(imagePath)
 
 export default function ItemDetail() {
   const { itemId } = useParams()

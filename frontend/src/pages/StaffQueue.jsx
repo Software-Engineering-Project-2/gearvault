@@ -11,9 +11,6 @@ const formatTime = value => {
   })
 }
 
-const CONDITION_IMAGES_BUCKET =
-  import.meta.env.VITE_SUPABASE_CONDITION_IMAGES_BUCKET || 'condition_images'
-
 export default function StaffQueue() {
   const [activeTab, setActiveTab] = useState('confirmed') // 'confirmed' | 'active_rentals' | 'disputes'
   const [confirmedBookings, setConfirmedBookings] = useState([])
@@ -89,10 +86,10 @@ export default function StaffQueue() {
 
     try {
       const uploadedPhoto = showConditionLog && conditionPhotoFile
-        ? await uploadStorageFile(conditionPhotoFile, 'pre-dispatch', CONDITION_IMAGES_BUCKET)
+        ? await uploadStorageFile(conditionPhotoFile, 'condition', { rentalId: handoverBooking.id })
         : null
       const payload = showConditionLog
-        ? { notes: conditionNotes, photo_url: uploadedPhoto?.publicUrl || photoUrl }
+        ? { notes: conditionNotes, photo_url: uploadedPhoto?.key || photoUrl }
         : {}
 
       const res = await api(`/staff/bookings/${handoverBooking.id}/handover`, {
@@ -122,11 +119,11 @@ export default function StaffQueue() {
 
     try {
       const uploadedPhoto = returnPhotoFile
-        ? await uploadStorageFile(returnPhotoFile, 'post-rental', CONDITION_IMAGES_BUCKET)
+        ? await uploadStorageFile(returnPhotoFile, 'condition', { rentalId: returnRental.id })
         : null
       const payload = {
         notes: returnNotes,
-        photo_url: uploadedPhoto?.publicUrl || returnPhotoUrl,
+        photo_url: uploadedPhoto?.key || returnPhotoUrl,
         has_damage: hasDamage,
         damage_type_id: hasDamage ? Number(damageTypeId) : null,
         severity: hasDamage ? Number(severity) : null,

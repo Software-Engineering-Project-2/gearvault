@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 import uuid
 
@@ -121,11 +122,27 @@ class Item(db.Model):
         daily_rate = get_item_daily_rate(
             self.purchase_price, self.purchase_date, category_name=cat_name
         )
+        media_base = (os.getenv("MEDIA_BASE_URL") or "").rstrip("/")
+        image_url = None
+        if self.image_path:
+            if self.image_path.startswith("http://") or self.image_path.startswith("https://"):
+                image_url = self.image_path
+            elif media_base:
+                image_url = f"{media_base}/{self.image_path.lstrip('/')}"
+            else:
+                endpoint = (os.getenv("S3_ENDPOINT_URL") or "").rstrip("/")
+                bucket = os.getenv("S3_BUCKET", "gearvault-media")
+                if endpoint:
+                    image_url = f"{endpoint}/{bucket}/{self.image_path.lstrip('/')}"
+                else:
+                    image_url = f"https://{bucket}.s3.amazonaws.com/{self.image_path.lstrip('/')}"
+
         return {
             "id": self.id,
             "name": self.name,
             "description": self.description,
             "image_path": self.image_path,
+            "image_url": image_url,
             "sku": self.sku,
             "category": self.category.to_dict() if self.category else None,
             "purchase_price": float(self.purchase_price),
@@ -291,12 +308,15 @@ class ItemConditionLog(db.Model):
     )
 
     def to_dict(self):
+        from app.services.storage_service import generate_presigned_download_url
+        signed_photo_url = generate_presigned_download_url(self.photo_url) if self.photo_url else None
         return {
             "id": self.id,
             "item_id": self.item_id,
             "rental_id": self.rental_id,
             "captured_by": self.captured_by,
-            "photo_url": self.photo_url,
+            "photo_url": signed_photo_url or self.photo_url,
+            "photo_key": self.photo_url,
             "notes": self.notes,
             "captured_at": self.captured_at.isoformat() if self.captured_at else None,
         }
