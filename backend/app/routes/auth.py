@@ -1,10 +1,14 @@
 from flask import Blueprint, request, jsonify, g
 from flask_jwt_extended import create_access_token
-from app.extensions import db
+from marshmallow import ValidationError
+from app.extensions import db, limiter
 from app.models import User, Role
 from app.rbac import jwt_required_custom, manager_required
+from app.schemas import RegisterSchema, LoginSchema
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+register_schema = RegisterSchema()
+login_schema = LoginSchema()
 
 
 @auth_bp.route("/health", methods=["GET"])
@@ -13,15 +17,22 @@ def health_check():
 
 
 @auth_bp.route("/register", methods=["POST"])
+@limiter.limit("10 per minute")
 def register():
-    data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
-    full_name = data.get("full_name", "").strip()
-    phone = data.get("phone", "").strip() or None
+    raw_data = request.get_json() or {}
+    try:
+        data = register_schema.load(raw_data)
+    except ValidationError as err:
+        first_err = next(iter(err.messages.values()))
+        err_msg = first_err[0] if isinstance(first_err, list) else str(first_err)
+        return jsonify({"error": err_msg, "messages": err.messages}), 400
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+    email = data["email"].strip().lower()
+    password = data["password"]
+    full_name = data.get("full_name", "").strip()
+    phone = data.get("phone")
+    if phone:
+        phone = phone.strip()
 
     if User.query.filter(db.func.lower(User.email) == email).first():
         return jsonify({"error": "A user with this email already exists"}), 409
@@ -51,13 +62,18 @@ def register():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def login():
-    data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
+    raw_data = request.get_json() or {}
+    try:
+        data = login_schema.load(raw_data)
+    except ValidationError as err:
+        first_err = next(iter(err.messages.values()))
+        err_msg = first_err[0] if isinstance(first_err, list) else str(first_err)
+        return jsonify({"error": err_msg, "messages": err.messages}), 400
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+    email = data["email"].strip().lower()
+    password = data["password"]
 
     user = User.query.filter(db.func.lower(User.email) == email).first()
     if not user or not user.check_password(password):

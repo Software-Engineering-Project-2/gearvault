@@ -9,9 +9,12 @@ from functools import wraps
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request, stream_with_context
 from flask_jwt_extended import decode_token
 from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
+from marshmallow import ValidationError
+from app.schemas import BookingHoldSchema, ReturnProcessSchema
 
 from app.extensions import db
 from app.models import (
@@ -53,6 +56,9 @@ BOOKING_STATUS_HELD = "Held"
 BOOKING_STATUS_CONFIRMED = "Confirmed"
 BOOKING_STATUS_CANCELLED = "Cancelled"
 BOOKING_STATUS_EXPIRED = "Expired"
+
+booking_hold_schema = BookingHoldSchema()
+return_process_schema = ReturnProcessSchema()
 
 
 from app.rbac import (
@@ -363,7 +369,14 @@ def delete_item(item_id):
 @roles_required("customer")
 def create_hold():
     expire_holds()
-    data = request.get_json() or {}
+    raw_data = request.get_json() or {}
+    try:
+        data = booking_hold_schema.load(raw_data)
+    except ValidationError as err:
+        first_err = next(iter(err.messages.values()))
+        err_msg = first_err[0] if isinstance(first_err, list) else str(first_err)
+        return jsonify({"error": err_msg, "messages": err.messages}), 400
+
     try:
         start, end = parse_time(data.get("start_ts")), parse_time(data.get("end_ts"))
         if start >= end or start < utcnow():
@@ -757,9 +770,16 @@ def staff_process_return(rental_id):
             }
         ), 400
 
-    data = request.get_json() or {}
-    condition_notes = data.get("notes", "").strip()
-    photo_url = data.get("photo_url", "").strip()
+    raw_data = request.get_json() or {}
+    try:
+        data = return_process_schema.load(raw_data)
+    except ValidationError as err:
+        first_err = next(iter(err.messages.values()))
+        err_msg = first_err[0] if isinstance(first_err, list) else str(first_err)
+        return jsonify({"error": err_msg, "messages": err.messages}), 400
+
+    condition_notes = (data.get("notes") or "").strip()
+    photo_url = (data.get("photo_url") or "").strip()
     has_damage = bool(data.get("has_damage", False))
     damage_type_id = data.get("damage_type_id")
     severity = data.get("severity")
@@ -1116,31 +1136,57 @@ def manager_analytics():
     """
     FR027: Aggregates manager dashboard metrics displaying revenue,
     most-rented items, damage-cost trends, and overdue rentals.
+    Uses SQL aggregation for production scale instead of in-memory lists.
     """
     now = utcnow()
-    rentals = Rental.query.all()
-    items = Item.query.all()
-    assessments = DamageAssessment.query.all()
 
-    total_rental_fees = sum(float(r.total_price or 0.0) for r in rentals)
-    total_damage_deductions = sum(float(a.damage_deduction or 0.0) for a in assessments)
-    total_late_penalties = sum(float(a.late_penalty or 0.0) for a in assessments)
+    # 1. Total rental fees from rentals
+    total_rental_fees = float(
+        db.session.query(func.coalesce(func.sum(Rental.total_price), 0.0)).scalar() or 0.0
+    )
+
+    # 2. Total damage deductions, late penalties, refunds from damage assessments
+    assessments_agg = db.session.query(
+        func.coalesce(func.sum(DamageAssessment.damage_deduction), 0.0),
+        func.coalesce(func.sum(DamageAssessment.late_penalty), 0.0),
+        func.coalesce(func.sum(DamageAssessment.deposit_refunded), 0.0),
+    ).first()
+
+    total_damage_deductions = float(assessments_agg[0] or 0.0) if assessments_agg else 0.0
+    total_late_penalties = float(assessments_agg[1] or 0.0) if assessments_agg else 0.0
+    total_refunds_issued = round(float(assessments_agg[2] or 0.0), 2) if assessments_agg else 0.0
     total_revenue = round(
         total_rental_fees + total_damage_deductions + total_late_penalties, 2
     )
 
-    active_rentals = [
-        r for r in rentals if (r.status or "").lower() in ("active", "checkedout")
-    ]
-    active_rentals_count = len(active_rentals)
-    total_deposits_held = round(
-        sum(float(r.deposit_held or 0.0) for r in active_rentals), 2
-    )
-    total_refunds_issued = round(
-        sum(float(a.deposit_refunded or 0.0) for a in assessments), 2
+    # 3. Active rentals count and deposits held
+    active_agg = db.session.query(
+        func.count(Rental.id),
+        func.coalesce(func.sum(Rental.deposit_held), 0.0),
+    ).filter(func.lower(Rental.status).in_(["active", "checkedout"])).first()
+
+    active_rentals_count = int(active_agg[0] or 0) if active_agg else 0
+    total_deposits_held = round(float(active_agg[1] or 0.0), 2) if active_agg else 0.0
+
+    # 4. Inventory items count
+    total_inventory_items = db.session.query(func.count(Item.id)).scalar() or 0
+
+    # 5. Disputes count
+    disputes_count = (
+        db.session.query(func.count(DamageAssessment.id))
+        .filter(DamageAssessment.status == "disputed")
+        .scalar()
+        or 0
     )
 
-    # Overdue rentals monitoring
+    # 6. Active rentals for overdue monitoring
+    active_rentals = (
+        Rental.query.filter(
+            func.lower(Rental.status).in_(["active", "checkedout"])
+        )
+        .options(joinedload(Rental.item))
+        .all()
+    )
     overdue_rentals_list = []
     for r in active_rentals:
         if r.due_at:
@@ -1174,45 +1220,58 @@ def manager_analytics():
                         }
                     )
 
-    # Most rented items ranking
-    item_rental_counts = {}
-    for r in rentals:
-        if r.item_id:
-            if r.item_id not in item_rental_counts:
-                item_rental_counts[r.item_id] = {
-                    "item_id": r.item_id,
-                    "name": r.item.name if r.item else f"Item #{r.item_id}",
-                    "sku": r.item.sku if r.item else "N/A",
-                    "category": r.item.category.name
-                    if r.item and r.item.category
-                    else "General",
-                    "rental_count": 0,
-                    "total_earned": 0.0,
-                }
-            item_rental_counts[r.item_id]["rental_count"] += 1
-            item_rental_counts[r.item_id]["total_earned"] += float(r.total_price or 0.0)
-
-    most_rented = sorted(
-        item_rental_counts.values(), key=lambda x: x["rental_count"], reverse=True
-    )[:10]
-
-    # Damage trends by category
-    damage_by_category = {}
-    for a in assessments:
-        cat = (
-            a.rental.item.category.name
-            if a.rental and a.rental.item and a.rental.item.category
-            else "General"
+    # 7. Most rented items ranking via SQL aggregation
+    most_rented_query = (
+        db.session.query(
+            Rental.item_id,
+            func.count(Rental.id).label("rental_count"),
+            func.coalesce(func.sum(Rental.total_price), 0.0).label("total_earned"),
         )
+        .filter(Rental.item_id.isnot(None))
+        .group_by(Rental.item_id)
+        .order_by(func.count(Rental.id).desc())
+        .limit(10)
+        .all()
+    )
+    most_rented = []
+    for item_id, count, earned in most_rented_query:
+        item = db.session.get(Item, item_id)
+        most_rented.append(
+            {
+                "item_id": item_id,
+                "name": item.name if item else f"Item #{item_id}",
+                "sku": item.sku if item else "N/A",
+                "category": item.category.name
+                if item and item.category
+                else "General",
+                "rental_count": count,
+                "total_earned": float(earned or 0.0),
+            }
+        )
+
+    # 8. Damage trends by category via SQL join and aggregation
+    damage_by_category = {}
+    damage_query = (
+        db.session.query(
+            DamageAssessment.damage_deduction,
+            Category.name,
+        )
+        .join(Rental, DamageAssessment.rental_id == Rental.id)
+        .join(Item, Rental.item_id == Item.id)
+        .outerjoin(Category, Item.category_id == Category.id)
+        .filter(DamageAssessment.damage_deduction > 0)
+        .all()
+    )
+    for deduction, cat_name in damage_query:
+        cat = cat_name or "General"
         if cat not in damage_by_category:
             damage_by_category[cat] = {
                 "category": cat,
                 "incidents": 0,
                 "total_damage_cost": 0.0,
             }
-        if float(a.damage_deduction or 0.0) > 0:
-            damage_by_category[cat]["incidents"] += 1
-            damage_by_category[cat]["total_damage_cost"] += float(a.damage_deduction)
+        damage_by_category[cat]["incidents"] += 1
+        damage_by_category[cat]["total_damage_cost"] += float(deduction or 0.0)
 
     damage_trends = sorted(
         damage_by_category.values(), key=lambda x: x["total_damage_cost"], reverse=True
@@ -1229,10 +1288,8 @@ def manager_analytics():
                 "total_deposits_held": total_deposits_held,
                 "total_refunds_issued": total_refunds_issued,
                 "overdue_count": len(overdue_rentals_list),
-                "total_inventory_items": len(items),
-                "disputes_count": len(
-                    [a for a in assessments if a.status == "disputed"]
-                ),
+                "total_inventory_items": total_inventory_items,
+                "disputes_count": disputes_count,
             },
             "most_rented_items": most_rented,
             "damage_trends": damage_trends,
@@ -1246,60 +1303,75 @@ def manager_analytics():
 def manager_export_monthly_csv():
     """
     FR027: Export monthly rental and financial report in CSV format.
+    Streamed in chunks and limited to prevent memory bloat.
     """
-    output = io.StringIO()
-    writer = csv.writer(output)
+    def generate_csv():
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-    # Standard CSV headers
-    writer.writerow(
-        [
-            "Rental_ID",
-            "Booking_ID",
-            "Item_Name",
-            "SKU",
-            "Customer_ID",
-            "Checkout_Date",
-            "Due_Date",
-            "Returned_Date",
-            "Rental_Status",
-            "Rental_Fee_INR",
-            "Deposit_Held_INR",
-            "Damage_Type",
-            "Damage_Severity",
-            "Damage_Deduction_INR",
-            "Late_Penalty_INR",
-            "Net_Deposit_Refund_INR",
-        ]
-    )
-
-    rentals = Rental.query.order_by(Rental.created_at.desc()).all()
-    for r in rentals:
-        a = r.damage_assessment
+        # Standard CSV headers
         writer.writerow(
             [
-                r.id,
-                r.booking_id or "",
-                r.item.name if r.item else "",
-                r.item.sku if r.item else "",
-                r.customer_id or "",
-                r.checkout_at.strftime("%Y-%m-%d %H:%M") if r.checkout_at else "",
-                r.due_at.strftime("%Y-%m-%d %H:%M") if r.due_at else "",
-                r.returned_at.strftime("%Y-%m-%d %H:%M") if r.returned_at else "",
-                r.status,
-                f"{float(r.total_price or 0.0):.2f}",
-                f"{float(r.deposit_held or 0.0):.2f}",
-                a.damage_type.name if a and a.damage_type else "None",
-                a.severity if a and a.severity else "0",
-                f"{float(a.damage_deduction or 0.0):.2f}" if a else "0.00",
-                f"{float(a.late_penalty or 0.0):.2f}" if a else "0.00",
-                f"{float(a.deposit_refunded or 0.0):.2f}" if a else "0.00",
+                "Rental_ID",
+                "Booking_ID",
+                "Item_Name",
+                "SKU",
+                "Customer_ID",
+                "Checkout_Date",
+                "Due_Date",
+                "Returned_Date",
+                "Rental_Status",
+                "Rental_Fee_INR",
+                "Deposit_Held_INR",
+                "Damage_Type",
+                "Damage_Severity",
+                "Damage_Deduction_INR",
+                "Late_Penalty_INR",
+                "Net_Deposit_Refund_INR",
             ]
         )
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
 
-    csv_data = output.getvalue()
+        rentals = (
+            Rental.query.options(
+                joinedload(Rental.item),
+                joinedload(Rental.damage_assessment).joinedload(DamageAssessment.damage_type),
+            )
+            .order_by(Rental.created_at.desc())
+            .limit(10000)
+            .all()
+        )
+        for r in rentals:
+            a = r.damage_assessment
+            writer.writerow(
+                [
+                    r.id,
+                    r.booking_id or "",
+                    r.item.name if r.item else "",
+                    r.item.sku if r.item else "",
+                    r.customer_id or "",
+                    r.checkout_at.strftime("%Y-%m-%d %H:%M") if r.checkout_at else "",
+                    r.due_at.strftime("%Y-%m-%d %H:%M") if r.due_at else "",
+                    r.returned_at.strftime("%Y-%m-%d %H:%M") if r.returned_at else "",
+                    r.status,
+                    f"{float(r.total_price or 0.0):.2f}",
+                    f"{float(r.deposit_held or 0.0):.2f}",
+                    a.damage_type.name if a and a.damage_type else "None",
+                    a.severity if a and a.severity else "0",
+                    f"{float(a.damage_deduction or 0.0):.2f}" if a else "0.00",
+                    f"{float(a.late_penalty or 0.0):.2f}" if a else "0.00",
+                    f"{float(a.deposit_refunded or 0.0):.2f}" if a else "0.00",
+                ]
+            )
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
     filename = f"gearvault_monthly_report_{utcnow().strftime('%Y_%m')}.csv"
     return Response(
-        csv_data,
+        stream_with_context(generate_csv()),
         mimetype="text/csv",
         headers={
             "Content-Disposition": f"attachment; filename={filename}",
