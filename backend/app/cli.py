@@ -146,3 +146,70 @@ def seed_command():
         click.echo("Skipping development users (SEED_DEV_USERS is not true).")
 
     click.echo("Database seeding completed successfully.")
+
+
+@click.command("create-user")
+@click.option("--email", required=True, help="User email address.")
+@click.option("--full-name", required=True, help="User full name.")
+@click.option(
+    "--role",
+    required=True,
+    type=click.Choice(["manager", "staff", "customer"], case_sensitive=False),
+    help="Role assigned to user.",
+)
+@click.option(
+    "--password",
+    prompt=False,
+    default=None,
+    help="User password (if omitted, reads from NEW_USER_PASSWORD env or prompts).",
+)
+@with_appcontext
+def create_user_command(email, full_name, role, password):
+    """Create a new user with the specified role, reading password securely."""
+    email_clean = email.strip().lower()
+    full_name_clean = full_name.strip()
+    role_clean = role.strip().lower()
+
+    # 1. Check if user already exists
+    existing_user = User.query.filter(db.func.lower(User.email) == email_clean).first()
+    if existing_user:
+        click.secho(
+            f"Error: User with email '{email_clean}' already exists (ID: {existing_user.id}, Role: {existing_user.role}).",
+            fg="red",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    # 2. Get password: from option, or NEW_USER_PASSWORD env, or interactive prompt
+    pwd = password or os.getenv("NEW_USER_PASSWORD")
+    if not pwd:
+        pwd = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+
+    if not pwd or len(pwd.strip()) == 0:
+        click.secho("Error: Password cannot be empty.", fg="red", err=True)
+        raise SystemExit(1)
+
+    # 3. Resolve role object
+    role_obj = Role.query.filter(db.func.lower(Role.name) == role_clean).first()
+    if not role_obj:
+        seed_canonical_data()
+        role_obj = Role.query.filter(db.func.lower(Role.name) == role_clean).first()
+
+    if not role_obj:
+        click.secho(f"Error: Role '{role_clean}' not found in database.", fg="red", err=True)
+        raise SystemExit(1)
+
+    # 4. Create and persist user
+    new_user = User(
+        email=email_clean,
+        full_name=full_name_clean,
+        role_id=role_obj.id,
+    )
+    new_user.set_password(pwd)
+    db.session.add(new_user)
+    db.session.commit()
+
+    click.secho(
+        f"Success: Created user '{new_user.email}' with role '{role_obj.name}' (ID: {new_user.id}).",
+        fg="green",
+    )

@@ -108,10 +108,11 @@ def create_app(test_config=None):
     limiter.init_app(app)
 
     # Register CLI commands
-    from app.cli import seed_canonical_data, seed_command
+    from app.cli import create_user_command, seed_canonical_data, seed_command
     from app.jobs import jobs_cli
 
     app.cli.add_command(seed_command)
+    app.cli.add_command(create_user_command)
     app.cli.add_command(jobs_cli)
 
     # Register blueprints
