@@ -1,14 +1,12 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { clearSession } from '../lib/api'
-import { supabase } from '../lib/supabaseClient'
 import NotificationBell from './NotificationBell'
 
 export default function NavBar({ user, onSignOut }) {
   const location = useLocation()
 
-  async function signOut() {
-    await supabase.auth.signOut()
+  function signOut() {
     clearSession()
     onSignOut()
     window.location.href = '/login'

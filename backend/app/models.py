@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import uuid
 
 from sqlalchemy.types import Uuid
 
@@ -21,16 +22,22 @@ class Role(db.Model):
 class User(db.Model):
     __tablename__ = "users"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(255), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
     role_id = db.Column(
         db.Integer, db.ForeignKey("roles.id"), nullable=False, default=1
     )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     role_rel = db.relationship("Role", backref="users", lazy="joined")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.id:
+            self.id = str(uuid.uuid4())
 
     @property
     def role(self) -> str:
@@ -63,6 +70,7 @@ class User(db.Model):
             "id": self.id,
             "email": self.email,
             "full_name": self.full_name,
+            "phone": self.phone,
             "role_id": self.role_id,
             "role": self.role,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -134,8 +142,9 @@ class Item(db.Model):
 class Booking(db.Model):
     __tablename__ = "bookings"
     id = db.Column(db.Integer, primary_key=True)
-    # Supabase auth.users uses UUID primary keys.
-    customer_id = db.Column(db.String(36), nullable=False, index=True)
+    customer_id = db.Column(
+        db.String(36), db.ForeignKey("users.id"), nullable=False, index=True
+    )
     item_id = db.Column(
         db.Integer, db.ForeignKey("items.id"), nullable=False, index=True
     )
@@ -195,7 +204,7 @@ class Rental(db.Model):
     item_id = db.Column(
         db.Integer, db.ForeignKey("items.id"), nullable=True, index=True
     )
-    customer_id = db.Column(db.String(36), nullable=True)
+    customer_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     checkout_at = db.Column(db.DateTime(timezone=True), nullable=True)
     due_at = db.Column(db.DateTime(timezone=True), nullable=True)
     returned_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -234,7 +243,9 @@ class Rental(db.Model):
 class Payment(db.Model):
     __tablename__ = "payments"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(36), nullable=False, index=True)
+    user_id = db.Column(
+        db.String(36), db.ForeignKey("users.id"), nullable=False, index=True
+    )
     rental_id = db.Column(
         db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True
     )
@@ -266,7 +277,7 @@ class ItemConditionLog(db.Model):
     rental_id = db.Column(
         db.Integer, db.ForeignKey("rentals.id"), nullable=True, index=True
     )
-    captured_by = db.Column(db.String(36), nullable=True)
+    captured_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     photo_url = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     captured_at = db.Column(
@@ -307,7 +318,7 @@ class DamageAssessment(db.Model):
     rental_id = db.Column(
         db.Integer, db.ForeignKey("rentals.id"), nullable=False, unique=True, index=True
     )
-    assessed_by = db.Column(db.String(36), nullable=True)
+    assessed_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     damage_type_id = db.Column(
         db.Integer, db.ForeignKey("damage_types.id"), nullable=True, index=True
     )
@@ -379,7 +390,9 @@ class DamageAssessment(db.Model):
 class Notification(db.Model):
     __tablename__ = "notifications"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String(36), nullable=False, index=True)
+    user_id = db.Column(
+        db.String(36), db.ForeignKey("users.id"), nullable=False, index=True
+    )
     type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     message = db.Column(db.Text, nullable=False)
@@ -403,7 +416,9 @@ class Notification(db.Model):
 class FinancialAuditLog(db.Model):
     __tablename__ = "financial_audit_log"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(Uuid(as_uuid=False), nullable=True, index=True)
+    user_id = db.Column(
+        db.String(36), db.ForeignKey("users.id"), nullable=True, index=True
+    )
     action = db.Column(db.Text, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=True)
     metadata_json = db.Column("metadata", db.JSON, nullable=True)

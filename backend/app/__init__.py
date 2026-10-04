@@ -1,5 +1,6 @@
 import os
 import threading
+from datetime import timedelta
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify
@@ -43,6 +44,8 @@ def create_app(test_config=None):
     app.config["JWT_SECRET_KEY"] = os.getenv(
         "JWT_SECRET_KEY", "gearvault-default-jwt-secret-key"
     )
+    jwt_expiry_minutes = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60"))
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=jwt_expiry_minutes)
 
     if test_config:
         app.config.update(test_config)
@@ -76,7 +79,6 @@ def create_app(test_config=None):
             db.session.commit()
 
             # Ensure development users exist for manual RBAC testing
-            from app.routes.auth import sync_user_to_supabase
             dev_password = os.getenv("DEV_USERS_PASSWORD", "DevPassword123!")
             dev_users = [
                 ("customer@test.com", "Customer Test User", 1),
@@ -93,8 +95,6 @@ def create_app(test_config=None):
                     # Maintain correct role assignment
                     user.role_id = role_id
                     user.set_password(dev_password)
-                # Ensure user exists in Supabase auth.users & profiles for booking integrity
-                sync_user_to_supabase(email, dev_password, full_name, role_id)
             db.session.commit()
 
             if DamageType.query.count() == 0:

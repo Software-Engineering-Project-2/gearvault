@@ -98,7 +98,6 @@ def notify_dispute_resolved(rental, assessment) -> Optional[Notification]:
 def notify_managers_of_dispute(rental, assessment) -> list:
     """Notifies all manager accounts that a customer has disputed a damage assessment."""
     from app.models import User, Role
-    from sqlalchemy import text
 
     item_name = rental.item.name if rental.item else "Equipment"
     deduct_str = (
@@ -120,31 +119,10 @@ def notify_managers_of_dispute(rental, assessment) -> list:
     )
 
     manager_uids = set()
-    # 1. Query local users table
     try:
         managers = User.query.join(Role).filter(Role.name == "manager").all()
         for mgr in managers:
             manager_uids.add(str(mgr.id))
-            try:
-                auth_user_row = db.session.execute(
-                    text("SELECT id FROM auth.users WHERE lower(email) = lower(:email) LIMIT 1"),
-                    {"email": mgr.email},
-                ).fetchone()
-                if auth_user_row and auth_user_row[0]:
-                    manager_uids.add(str(auth_user_row[0]))
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    # 2. Query Supabase profiles if available
-    try:
-        prof_rows = db.session.execute(
-            text("SELECT p.id FROM profiles p JOIN roles r ON p.role_id = r.id WHERE r.name = 'manager'")
-        ).fetchall()
-        for prow in prof_rows:
-            if prow and prow[0]:
-                manager_uids.add(str(prow[0]))
     except Exception:
         pass
 

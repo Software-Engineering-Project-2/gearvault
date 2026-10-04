@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { api, setSession } from '../lib/api'
-import { supabase } from '../lib/supabaseClient'
 
 export default function Signup({ onAuthenticated }) {
   const [email, setEmail] = useState('')
@@ -16,42 +15,20 @@ export default function Signup({ onAuthenticated }) {
     setError(null)
     setLoading(true)
     try {
-      // 1. Register through Flask backend
-      try {
-        const res = await api('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            email: email.trim().toLowerCase(),
-            password,
-            full_name: fullName.trim()
-          })
-        })
-        if (res && res.access_token) {
-          setSession(res.access_token, res.user)
-          onAuthenticated(res.user)
-          navigate('/dashboard')
-          return
-        }
-      } catch (backendErr) {
-        if (backendErr.message && backendErr.message.includes('already exists')) {
-          throw backendErr
-        }
-      }
-
-      // 2. Supabase fallback
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } }
+      const res = await api('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          full_name: fullName.trim(),
+        }),
       })
-      if (error) throw error
-      if (!data.session) {
-        setError('Check your email to confirm your account, then log in.')
+      if (res && res.access_token) {
+        setSession(res.access_token, res.user)
+        onAuthenticated(res.user)
+        navigate('/dashboard')
         return
       }
-      setSession(data.session.access_token, data.user)
-      onAuthenticated(data.user)
-      navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Signup error')
     } finally {
