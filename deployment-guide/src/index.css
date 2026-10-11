@@ -1,0 +1,1156 @@
+/* =====================================================================
+   AWS SKILL BUILDER & CLOUDSCAPE DESIGN SYSTEM THEME TOKENS
+   ===================================================================== */
+:root {
+  /* Navigation & Dark Surfaces */
+  --theme-top-nav: #161e2d;
+  --theme-top-nav-deep: #111827;
+  --theme-dark-surface: #1b2636;
+  --theme-hero-gradient: linear-gradient(135deg, #161e2d 0%, #0d2836 50%, #083742 100%);
+
+  /* Primary Action Accents */
+  --theme-orange: #ff9900;
+  --theme-orange-hover: #ec7211;
+  --theme-orange-light: #fff8e7;
+  --theme-orange-border: #f3a847;
+
+  /* Informational & Links */
+  --theme-link: #0073bb;
+  --theme-link-hover: #005ea6;
+  --theme-blue: #146eb4;
+  --theme-teal: #007a87;
+  --theme-green: #159957;
+
+  /* Light Content Surfaces */
+  --theme-page-bg: #f2f3f3;
+  --theme-surface: #ffffff;
+  --theme-surface-alt: #fafafa;
+  --theme-surface-active: #edf5fc;
+
+  /* Borders & Dividers */
+  --theme-border: #d5dbdb;
+  --theme-border-strong: #b7c0c7;
+  --theme-border-subtle: #eaeded;
+
+  /* Typography Colors */
+  --theme-text: #16191f;
+  --theme-text-secondary: #5f6b7a;
+  --theme-text-muted: #879596;
+  --theme-text-light: #ffffff;
+
+  /* Status Colors */
+  --theme-success: #1d8102;
+  --theme-success-bg: #f2f9f2;
+  --theme-success-border: #1d8102;
+
+  --theme-warning: #ec7211;
+  --theme-warning-bg: #fff9e6;
+  --theme-warning-border: #ec7211;
+
+  --theme-error: #d13212;
+  --theme-error-bg: #fdf3f1;
+  --theme-error-border: #d13212;
+
+  --theme-info: #0972d3;
+  --theme-info-bg: #f1f7fd;
+  --theme-info-border: #0972d3;
+
+  /* Fonts */
+  --font-sans: 'Open Sans', Arial, Helvetica, sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+
+  /* Cloudscape Corner Radii */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+
+  /* Shadows - Subtle enterprise elevation */
+  --shadow-card: 0 1px 2px 0 rgba(0, 28, 36, 0.1);
+  --shadow-hover: 0 2px 6px 0 rgba(0, 28, 36, 0.15);
+  --shadow-dropdown: 0 4px 16px 0 rgba(0, 28, 36, 0.2);
+}
+
+/* =====================================================================
+   BASE & RESET
+   ===================================================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--theme-page-bg);
+  color: var(--theme-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #eaeded;
+}
+::-webkit-scrollbar-thumb {
+  background: #b7c0c7;
+  border-radius: var(--radius-xs);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #879596;
+}
+
+/* Focus outline accessibility */
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--theme-link);
+  outline-offset: 1px;
+}
+
+/* =====================================================================
+   GLOBAL TOP NAVIGATION (Dark Navy #161E2D)
+   ===================================================================== */
+.aws-app-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.aws-header-container {
+  width: 100%;
+}
+
+.aws-top-nav {
+  height: 60px;
+  background-color: var(--theme-top-nav);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.aws-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.aws-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aws-brand-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--theme-text-light);
+  letter-spacing: 0.05em;
+}
+
+.aws-brand-divider {
+  color: var(--theme-text-secondary);
+  font-size: 16px;
+  font-weight: 300;
+}
+
+.aws-brand-sub {
+  font-size: 13px;
+  color: #aab7b8;
+  font-weight: 400;
+}
+
+.aws-badge-pill {
+  background: rgba(255, 153, 0, 0.15);
+  border: 1px solid var(--theme-orange-border);
+  color: var(--theme-orange);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  display: inline-flex;
+  align-items: center;
+}
+
+.aws-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aws-btn-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #232f3e;
+  border: 1px solid #414d5c;
+  color: #eaeded;
+  padding: 6px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.aws-btn-nav:hover {
+  background: #313f53;
+  color: #ffffff;
+  border-color: #68707f;
+}
+
+.aws-btn-nav-danger:hover {
+  background: rgba(209, 50, 18, 0.2);
+  border-color: var(--theme-error);
+}
+
+/* =====================================================================
+   LESSON HERO BANNER (AWS Skill Builder Course Hero)
+   ===================================================================== */
+.aws-hero-banner {
+  background: var(--theme-hero-gradient);
+  border-bottom: 1px solid #232f3e;
+  padding: 32px 36px 36px 36px;
+  color: var(--theme-text-light);
+}
+
+.aws-hero-content {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.aws-hero-tag {
+  color: var(--theme-orange);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.aws-hero-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.25;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.aws-hero-desc {
+  font-size: 14px;
+  color: #d5dbdb;
+  max-width: 900px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+/* Hero Progress & Stats Box */
+.aws-hero-progress-box {
+  background: rgba(22, 30, 45, 0.85);
+  border: 1px solid #313f53;
+  border-radius: var(--radius-sm);
+  padding: 18px 22px;
+  max-width: 900px;
+}
+
+.aws-hero-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.aws-hero-progress-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #eaeded;
+}
+
+.aws-hero-progress-pct {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--theme-orange);
+}
+
+.aws-hero-track {
+  height: 6px;
+  background: #313f53;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.aws-hero-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #ff9900 0%, #146eb4 100%);
+  transition: width 0.3s ease;
+}
+
+.aws-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.aws-stat-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+}
+
+.aws-stat-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: var(--font-mono);
+}
+
+.aws-stat-lbl {
+  font-size: 11px;
+  color: #879596;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+/* =====================================================================
+   APPLICATION SHELL LAYOUT (Sidebar + Main Content)
+   ===================================================================== */
+.aws-layout-shell {
+  display: flex;
+  flex: 1;
+  max-width: 1680px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Left Sidebar (Course Navigation) */
+.aws-sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: var(--theme-surface);
+  border-right: 1px solid var(--theme-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 60px;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.aws-sidebar-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--theme-border);
+  background: var(--theme-surface-alt);
+}
+
+.aws-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--theme-text-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.aws-sidebar-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--theme-text);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.aws-sidebar-pct {
+  font-family: var(--font-mono);
+  color: var(--theme-link);
+}
+
+.aws-sidebar-progress-track {
+  height: 4px;
+  background: var(--theme-border);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+.aws-sidebar-progress-fill {
+  height: 100%;
+  background: var(--theme-orange);
+  transition: width 0.3s ease;
+}
+
+.aws-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.aws-sidebar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 4px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  width: 100%;
+}
+
+.aws-sidebar-row:hover {
+  background: #f8f9fa;
+}
+
+.aws-sidebar-row.active {
+  background: var(--theme-surface-active);
+  border-left-color: var(--theme-link);
+}
+
+.aws-sidebar-row.completed {
+  border-left-color: var(--theme-success);
+}
+
+.aws-sidebar-row-indicator {
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+  background: #eaeded;
+  color: var(--theme-text-secondary);
+  font-family: var(--font-mono);
+}
+
+.aws-sidebar-row.active .aws-sidebar-row-indicator {
+  background: var(--theme-link);
+  color: #ffffff;
+}
+
+.aws-sidebar-row.completed .aws-sidebar-row-indicator {
+  background: var(--theme-success);
+  color: #ffffff;
+}
+
+.aws-indicator-done {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.aws-sidebar-row-info {
+  flex: 1;
+}
+
+.aws-sidebar-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-text);
+  line-height: 1.35;
+}
+
+.aws-sidebar-row.active .aws-sidebar-row-name {
+  color: var(--theme-link);
+}
+
+.aws-sidebar-row-count {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  margin-top: 3px;
+}
+
+/* Main Content Area */
+.aws-main-content {
+  flex: 1;
+  padding: 24px 32px 64px 32px;
+  max-width: calc(100% - 300px);
+}
+
+/* =====================================================================
+   CONFIG BAR (AWS Cloudscape Container Style)
+   ===================================================================== */
+.config-panel {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-sm);
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.config-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--theme-text);
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.config-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--theme-text);
+  margin-bottom: 4px;
+}
+
+.config-input {
+  width: 100%;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--radius-xs);
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--theme-text);
+  font-family: var(--font-mono);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.config-input:focus {
+  border-color: var(--theme-link);
+  box-shadow: 0 0 0 2px rgba(0, 115, 187, 0.2);
+  outline: none;
+}
+
+/* =====================================================================
+   20-SERVICE ASSIGNMENT SCORECARD
+   ===================================================================== */
+.scorecard-section {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-sm);
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.scorecard-item {
+  background: var(--theme-surface-alt);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xs);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s;
+}
+
+.scorecard-item:hover {
+  background: #ffffff;
+  border-color: var(--theme-border-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.scorecard-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scorecard-icon {
+  width: 28px;
+  height: 28px;
+  background: #eaeded;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.scorecard-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-text);
+}
+
+.scorecard-cat {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+}
+
+.scorecard-status {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--theme-border-strong);
+}
+
+.scorecard-status.active {
+  background: var(--theme-success);
+  box-shadow: 0 0 6px rgba(29, 129, 2, 0.4);
+}
+
+/* =====================================================================
+   CONTROLS BAR (Search, Filters, View Toggles)
+   ===================================================================== */
+.controls-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px 18px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--radius-xs);
+  padding: 6px 12px;
+  min-width: 280px;
+  flex: 1;
+}
+
+.search-box:focus-within {
+  border-color: var(--theme-link);
+  box-shadow: 0 0 0 2px rgba(0, 115, 187, 0.2);
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  color: var(--theme-text);
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+}
+
+.view-toggles {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  border: 1px solid var(--theme-border-strong);
+  color: var(--theme-text);
+  padding: 6px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-toggle:hover {
+  background: #f8f9fa;
+  border-color: #68707f;
+}
+
+.btn-toggle.active {
+  background: var(--theme-top-nav);
+  border-color: var(--theme-top-nav);
+  color: #ffffff;
+}
+
+/* =====================================================================
+   PHASE CARD (Module Accordion)
+   ===================================================================== */
+.aws-phases-container {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.aws-phase-wrapper {
+  scroll-margin-top: 80px;
+}
+
+.phase-card {
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.phase-card:hover {
+  border-color: var(--theme-border-strong);
+}
+
+.phase-card.all-completed {
+  border-left: 4px solid var(--theme-success);
+}
+
+.phase-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  background: var(--theme-surface-alt);
+  border-bottom: 1px solid var(--theme-border);
+  user-select: none;
+}
+
+.phase-header:hover {
+  background: #f4f6f6;
+}
+
+.phase-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.phase-number-badge {
+  background: var(--theme-top-nav);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.05em;
+}
+
+.phase-card.all-completed .phase-number-badge {
+  background: var(--theme-success);
+}
+
+.phase-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--theme-text);
+}
+
+.phase-desc {
+  font-size: 13px;
+  color: var(--theme-text-secondary);
+  margin-top: 2px;
+}
+
+.phase-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.phase-counter {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+}
+
+.phase-content {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #ffffff;
+}
+
+/* =====================================================================
+   TASK CARD (Cloud Learning Step Presentation)
+   ===================================================================== */
+.task-card {
+  background: #ffffff;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xs);
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.task-card.completed {
+  background: #fafafa;
+  border-color: #c3e6cb;
+}
+
+.task-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* Checkbox (Cloudscape Enterprise Square) */
+.custom-checkbox {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  border-radius: var(--radius-xs);
+  border: 2px solid var(--theme-text-muted);
+  background: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  transition: all 0.15s;
+}
+
+.custom-checkbox:hover {
+  border-color: var(--theme-link);
+}
+
+.custom-checkbox.checked {
+  background: var(--theme-success);
+  border-color: var(--theme-success);
+  color: #ffffff;
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text);
+}
+
+.task-card.completed .task-title {
+  text-decoration: line-through;
+  color: var(--theme-text-muted);
+}
+
+.resource-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.resource-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  background: #eaeded;
+  color: var(--theme-text);
+  border: 1px solid var(--theme-border);
+}
+
+.task-summary {
+  font-size: 13px;
+  color: var(--theme-text-secondary);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* =====================================================================
+   MODE TABS (CLI vs Console Segmented Control)
+   ===================================================================== */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: #eaeded;
+  padding: 3px;
+  border-radius: var(--radius-xs);
+  margin-top: 14px;
+  width: fit-content;
+}
+
+.mode-tab {
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.15s;
+}
+
+.mode-tab:hover {
+  color: var(--theme-text);
+}
+
+.mode-tab.active {
+  background: #ffffff;
+  color: var(--theme-link);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* =====================================================================
+   CODE BLOCKS / CLI TERMINAL
+   ===================================================================== */
+.code-box {
+  margin-top: 10px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.code-content {
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #f1f5f9;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.55;
+}
+
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #334155;
+  border: 1px solid #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-copy:hover {
+  background: #475569;
+}
+
+.btn-copy.copied {
+  background: var(--theme-success);
+  border-color: var(--theme-success);
+  color: #ffffff;
+}
+
+/* =====================================================================
+   CONSOLE WALKTHROUGH BOX
+   ===================================================================== */
+.console-box {
+  margin-top: 10px;
+  background: #f8f9fa;
+  border: 1px solid var(--theme-border);
+  border-radius: var(--radius-xs);
+  padding: 14px 18px;
+}
+
+.console-step-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.console-step-item {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--theme-text);
+}
+
+.step-num {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--theme-link);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  margin-top: 1px;
+}
+
+/* =====================================================================
+   CALLOUTS / ALERTS (AWS Documentation Style)
+   ===================================================================== */
+.callout {
+  padding: 12px 16px;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.callout-info {
+  background: var(--theme-info-bg);
+  border-left: 4px solid var(--theme-info);
+  color: var(--theme-text);
+}
+
+.callout-warning {
+  background: var(--theme-warning-bg);
+  border-left: 4px solid var(--theme-warning);
+  color: var(--theme-text);
+}
+
+.callout-success {
+  background: var(--theme-success-bg);
+  border-left: 4px solid var(--theme-success);
+  color: var(--theme-text);
+}
+
+/* =====================================================================
+   AWS ENTERPRISE BUTTONS
+   ===================================================================== */
+.btn-primary {
+  background: var(--theme-orange);
+  color: #16191f;
+  border: 1px solid #d58000;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-primary:hover {
+  background: var(--theme-orange-hover);
+}
+
+/* =====================================================================
+   ARCHITECTURE BLUEPRINT MODAL (Cloudscape Dialog)
+   ===================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 7, 20, 0.65);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-card {
+  background: #ffffff;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: var(--radius-sm);
+  width: 100%;
+  max-width: 950px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px 32px;
+  position: relative;
+  box-shadow: var(--shadow-dropdown);
+  color: var(--theme-text);
+}
+
+.btn-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+}
+
+.btn-close:hover {
+  background: #eaeded;
+  color: var(--theme-text);
+}
+
+/* =====================================================================
+   RESPONSIVE LAYOUT
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .aws-layout-shell {
+    flex-direction: column;
+  }
+
+  .aws-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--theme-border);
+  }
+
+  .aws-main-content {
+    max-width: 100%;
+    padding: 20px 16px 48px 16px;
+  }
+
+  .aws-hero-banner {
+    padding: 24px 20px;
+  }
+}
