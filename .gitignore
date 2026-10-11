@@ -12,3 +12,8 @@ dist/
 
 # Misc
 .DS_Store
+
+# Deployment State & Secrets (Do Not Commit)
+deploy-state.json
+scratch/
+*.secret
