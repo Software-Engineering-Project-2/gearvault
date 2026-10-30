@@ -15,6 +15,8 @@ param(
     [string]$Region = "ap-south-1"
 )
 
+Set-Location $PSScriptRoot
+
 Write-Host "`n========================================================" -ForegroundColor Yellow
 Write-Host " PAUSING GEARVAULT PRODUCTION INFRASTRUCTURE" -ForegroundColor Magenta
 Write-Host "========================================================" -ForegroundColor Yellow

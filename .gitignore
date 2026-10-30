@@ -16,5 +16,6 @@ daa_assignment/
 
 # Deployment State & Secrets (Do Not Commit)
 deploy-state.json
-scratch/
+scratch/*
+!scratch/.gitkeep
 *.secret

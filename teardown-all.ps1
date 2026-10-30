@@ -24,6 +24,15 @@ param(
 
 $ErrorActionPreference = "Continue"
 
+# Ensure execution always operates from repository root
+Set-Location $PSScriptRoot
+
+# Auto-create local scratch directory for temporary AWS CLI parameter files
+$ScratchDir = Join-Path $PSScriptRoot "scratch"
+if (-not (Test-Path $ScratchDir)) {
+    New-Item -ItemType Directory -Path $ScratchDir -Force | Out-Null
+}
+
 function Log-Step($step, $msg) {
     Write-Host "`n========================================================" -ForegroundColor Yellow
     Write-Host " [TEARDOWN $step] $msg" -ForegroundColor Magenta

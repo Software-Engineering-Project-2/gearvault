@@ -28,6 +28,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Ensure execution always operates from repository root
+Set-Location $PSScriptRoot
+
+# Auto-create local scratch directory for temporary AWS CLI parameter files
+$ScratchDir = Join-Path $PSScriptRoot "scratch"
+if (-not (Test-Path $ScratchDir)) {
+    New-Item -ItemType Directory -Path $ScratchDir -Force | Out-Null
+}
+
 function Log-Step($phase, $msg) {
     Write-Host "`n========================================================" -ForegroundColor Cyan
     Write-Host " [$phase] $msg" -ForegroundColor Green
@@ -570,11 +579,18 @@ aws cloudwatch put-metric-alarm `
   --region $Region
 
 # Build Frontend (using relative /api for unified CloudFront CDN origin proxying)
-Set-Location frontend
+Set-Location (Join-Path $PSScriptRoot "frontend")
+if (-not (Test-Path "node_modules")) {
+    Write-Host "Installing frontend dependencies (npm install)..." -ForegroundColor Cyan
+    npm install
+}
 "VITE_API_URL=/api" | Out-File -FilePath ".env.production" -Encoding utf8
 npm run build
+if (-not (Test-Path "dist")) {
+    throw "Frontend build failed: dist directory was not created!"
+}
 aws s3 sync dist/ "s3://$FrontendBucket" --delete --region $Region
-Set-Location ..
+Set-Location $PSScriptRoot
 
 Write-Host "`n========================================================" -ForegroundColor Green
 Write-Host "                DEPLOYMENT COMPLETE!                    " -ForegroundColor Green
