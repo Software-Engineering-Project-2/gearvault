@@ -1,0 +1,1050 @@
+{
+  "id": "573d7922-9247-4e7f-b9c8-483fe29e85f2",
+  "version": "2.0",
+  "name": "GearVault",
+  "url": "https://d2wvsbj3dzkosr.cloudfront.net",
+  "tests": [
+    {
+      "id": "0dcf1a19-8e66-4736-aee1-e30c7ac6bdbf",
+      "name": "TC01 - New customer sign up",
+      "commands": [
+        {
+          "id": "bddae435-6848-4408-be4f-b3da767a0663",
+          "comment": "Open the site",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "b10aff5f-feea-4743-b98a-5781f720d449",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "c9dc7c19-2820-464e-baa7-df69459b4586",
+          "comment": "",
+          "command": "setWindowSize",
+          "target": "1280x860",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "22469494-95c3-482c-ab22-4ac7f327c0ff",
+          "comment": "Start as a logged-out guest",
+          "command": "executeScript",
+          "target": "localStorage.clear()",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "977e832a-f569-480e-b530-6e4c4b5048d2",
+          "comment": "",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "e1334fde-945a-44aa-93c7-71f346d834ca",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "bee65496-f463-491d-b02c-ee48164ffa6c",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "b460a65d-a11a-46fb-a79f-15026947ce30",
+          "comment": "Generate a unique email for this run",
+          "command": "executeScript",
+          "target": "return 'selenium.' + Date.now() + '@test.com'",
+          "targets": [],
+          "value": "email"
+        },
+        {
+          "id": "dd1c6734-e87e-40fd-b673-2286e8876e3b",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//a[text()='Create account']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "358004a8-8506-4a53-be65-cab3ba3b1f9f",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "34f5315d-012e-435d-b734-f36a28180088",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Create Your GearVault Account']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "dbe7aca8-45d9-4ae5-b1b2-b5fb0eb5c268",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='text']",
+          "targets": [],
+          "value": "Selenium Tester"
+        },
+        {
+          "id": "e8b397f7-8d2f-435d-856a-3c401f1b2f48",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "cc9d6a5a-1b69-4997-b2b2-e6ac33f72172",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='email']",
+          "targets": [],
+          "value": "${email}"
+        },
+        {
+          "id": "8753f433-d067-4b8d-bcb0-019baff54bcb",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "9fe32aee-77d0-4c76-9faf-3f497cfabe77",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='password']",
+          "targets": [],
+          "value": "Test@1234"
+        },
+        {
+          "id": "dfc100c4-abc8-4dd3-b9b5-e3314bc2baaf",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "92d9a229-ed4d-4ab1-9379-5740a0359b17",
+          "comment": "",
+          "command": "click",
+          "target": "css=button[type='submit']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "6d26a934-c2eb-4e22-b5ff-cff5f60b4e92",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "3119bf66-2331-49ba-80ac-2939c0eba2be",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "css=.user-badge-pill",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "60274bbb-197a-4186-92b5-c4fcc67f3cb5",
+          "comment": "Navbar shows the logged-in email",
+          "command": "assertElementPresent",
+          "target": "xpath=//div[contains(@class,'user-badge-pill')]/span[text()='${email}']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "13c3adbe-eb7e-4143-b245-529e8b7cc5b0",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "618f06cd-3330-4ef7-ad34-ea3f76826e8d",
+          "comment": "Role badge shows CUSTOMER",
+          "command": "assertElementPresent",
+          "target": "xpath=//div[contains(@class,'user-badge-pill')]/span[text()='customer']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "ad628f76-99a2-492c-9a89-10de78136a0f",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "e8b3e4f3-3e33-483c-87f6-aebee6315a06",
+          "comment": "Customer menu is visible",
+          "command": "assertElementPresent",
+          "target": "xpath=//a[text()='Reservations']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "df9a877b-aa17-4e7a-b7b4-4f20b340acf5",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "3745aed8-2dc5-409b-9b86-a08fb8584aeb",
+          "comment": "",
+          "command": "assertText",
+          "target": "css=.card h2",
+          "targets": [],
+          "value": "Equipment Inventory"
+        },
+        {
+          "id": "f422426d-1aa1-4666-b420-bc60c7306025",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "b0cfffcf-d1e4-4ccf-a806-a104af0808ff",
+      "name": "TC02 - Login with valid credentials",
+      "commands": [
+        {
+          "id": "7fd12452-0d04-488d-a037-a814a6730bcb",
+          "comment": "Open the site",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "eda0b484-d562-479f-983e-75752fe3d386",
+          "comment": "",
+          "command": "setWindowSize",
+          "target": "1280x860",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "fc5a322b-e760-4207-ac31-66ade3291557",
+          "comment": "Start as a logged-out guest",
+          "command": "executeScript",
+          "target": "localStorage.clear()",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "571319df-a192-47f5-b8cb-984bfbe94a25",
+          "comment": "",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "a2f851e5-b52d-4f66-87c2-5d1e15cdb0a3",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "6bf6d9dd-2f2a-40fa-9601-6c61133ac551",
+          "comment": "Generate a unique email for this run",
+          "command": "executeScript",
+          "target": "return 'selenium.' + Date.now() + '@test.com'",
+          "targets": [],
+          "value": "email"
+        },
+        {
+          "id": "f6ca9d16-ff01-4dd4-a2ff-9c95d624d940",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//a[text()='Create account']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "fea39bc0-3105-4009-ae85-f9e7bacb9591",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Create Your GearVault Account']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "0191644c-13d9-49cd-8eb7-3e1820ca5fbe",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='text']",
+          "targets": [],
+          "value": "Selenium Tester"
+        },
+        {
+          "id": "723ef6c4-dc06-4394-b139-35f947b105eb",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='email']",
+          "targets": [],
+          "value": "${email}"
+        },
+        {
+          "id": "0bc91392-0d58-419c-b0ed-050ce1893d4e",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='password']",
+          "targets": [],
+          "value": "Test@1234"
+        },
+        {
+          "id": "c072f3db-6572-4844-91a7-9c0df1176ab1",
+          "comment": "",
+          "command": "click",
+          "target": "css=button[type='submit']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "de7cf832-3395-4b2b-a8da-d6c0677a528a",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "css=.user-badge-pill",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "7f6ca0ad-5da3-4f29-8110-b615a26118cb",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//button[text()='Sign Out']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "325ceb42-5adf-424d-8533-d26d35fd56ea",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "f7eaad4e-52ea-49b0-9cb6-dfb416049814",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='email']",
+          "targets": [],
+          "value": "${email}"
+        },
+        {
+          "id": "08711cba-6bde-4929-8771-771881ff0ee5",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='password']",
+          "targets": [],
+          "value": "Test@1234"
+        },
+        {
+          "id": "b640790d-3275-43ba-9b7b-593934fd541f",
+          "comment": "",
+          "command": "click",
+          "target": "css=button[type='submit']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "7f26f677-7596-4eef-8c6b-59afc9248148",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "css=.user-badge-pill",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "8fa692d2-067b-4264-af4c-14cc691c4203",
+          "comment": "Navbar shows the logged-in email",
+          "command": "assertElementPresent",
+          "target": "xpath=//div[contains(@class,'user-badge-pill')]/span[text()='${email}']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "40ded5eb-f32c-4c6d-a705-1117195bfda2",
+          "comment": "Role badge shows CUSTOMER",
+          "command": "assertElementPresent",
+          "target": "xpath=//div[contains(@class,'user-badge-pill')]/span[text()='customer']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "7241f7f9-5fed-49fa-9ce4-ce33e8c96d28",
+          "comment": "",
+          "command": "assertText",
+          "target": "css=.card h2",
+          "targets": [],
+          "value": "Equipment Inventory"
+        }
+      ]
+    },
+    {
+      "id": "ced54adc-ad70-4ea9-a93a-f652f6bf3b30",
+      "name": "TC03 - Login with wrong password is rejected",
+      "commands": [
+        {
+          "id": "2d795d0b-5dcb-4777-85b0-972a24842d9e",
+          "comment": "Open the site",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "701de35d-a6b5-4235-9b57-2821f448c179",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "dd0dd0eb-1699-44fe-b28d-9e6f3308b645",
+          "comment": "",
+          "command": "setWindowSize",
+          "target": "1280x860",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "f13a1f9a-a40e-4a48-bf65-a5db715a895d",
+          "comment": "Start as a logged-out guest",
+          "command": "executeScript",
+          "target": "localStorage.clear()",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "5c071fa5-e2f2-4f3f-911e-406adbf4e0c3",
+          "comment": "",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "9fe73cb6-0b9f-417d-a69e-55a9ff47a46e",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "9e71bdc4-d8e4-418c-acd2-d917a49fc554",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "50672b1f-5c49-4ad2-98e5-90f93d54981a",
+          "comment": "Generate a unique email for this run",
+          "command": "executeScript",
+          "target": "return 'selenium.' + Date.now() + '@test.com'",
+          "targets": [],
+          "value": "email"
+        },
+        {
+          "id": "79706289-f404-47dc-94eb-4e06e9087b79",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//a[text()='Create account']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "fdfec365-8868-45d4-81dd-fbe3b0ed69bb",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "ec7b8584-cd97-49fb-bc98-1c8a8584e4e9",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Create Your GearVault Account']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "53ee3cdc-9705-483a-b173-91d50b5f2d96",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='text']",
+          "targets": [],
+          "value": "Selenium Tester"
+        },
+        {
+          "id": "0654e2ee-bb1a-48b2-8338-43ee6f22ea1d",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "553d9eb0-9a2b-4e33-a9a3-edfc7572c0b0",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='email']",
+          "targets": [],
+          "value": "${email}"
+        },
+        {
+          "id": "b2137aac-5f5e-45db-912e-c3df8b5fa0db",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "fe3d5ed0-1d55-4a9e-8320-bde6bb8565a5",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='password']",
+          "targets": [],
+          "value": "Test@1234"
+        },
+        {
+          "id": "8463dab6-663e-496e-886c-8da27f6992c7",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "25af44b6-7b78-46a1-a2f3-8fe16e7b0e31",
+          "comment": "",
+          "command": "click",
+          "target": "css=button[type='submit']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "c95bee02-f072-4e1a-8205-3e73d0961aab",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "46863a7a-c5df-433b-a163-82d07c1b77f6",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "css=.user-badge-pill",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "7df8be28-8693-44be-b456-dc88b18f4e7e",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//button[text()='Sign Out']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "2950355d-0e6a-43a2-b84b-1d1c7822199f",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "2f8b57e9-8440-4285-a194-cdc79c306abd",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "7ebbd0b0-232a-413b-9c2f-ad72c9d2cd07",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='email']",
+          "targets": [],
+          "value": "${email}"
+        },
+        {
+          "id": "11667316-d106-4b29-bdda-244e078ad533",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "e180a18a-43a8-481c-87a5-b5444298de0e",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='password']",
+          "targets": [],
+          "value": "WrongPass999"
+        },
+        {
+          "id": "3f4a18ce-5812-4f13-9f61-16a14b0b380d",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "4fc9e5c5-15f9-49dd-b5cc-2fa5ddeb465c",
+          "comment": "",
+          "command": "click",
+          "target": "css=button[type='submit']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "2c178247-f517-48ea-a612-4c993e8694c0",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "13f595be-0ca0-4097-bdbf-a65c34f0b0d9",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "css=.notice.error",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "a292e121-5c5f-462a-84f5-63a329e6a61d",
+          "comment": "",
+          "command": "assertText",
+          "target": "css=.notice.error",
+          "targets": [],
+          "value": "Invalid email or password"
+        },
+        {
+          "id": "1947d978-bf16-47a8-8301-674f32f17d6c",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "29bfc68a-d6ef-4cd8-9c60-a145019a63a5",
+          "comment": "User is NOT logged in",
+          "command": "assertElementNotPresent",
+          "target": "css=.user-badge-pill",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "45132624-f43d-4074-82c1-0c094bdb99e4",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        }
+      ]
+    },
+    {
+      "id": "bdba6421-62a5-4a0b-8f01-ae7a8d548728",
+      "name": "TC04 - Guest browses and searches the catalog",
+      "commands": [
+        {
+          "id": "b792d30e-ceee-4e94-a5c1-d539a354fdeb",
+          "comment": "Open the site",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "c0dd1f9e-d51a-4fa9-840b-dcad688282e7",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "52b5d387-0c91-4769-8831-8815c817cd20",
+          "comment": "",
+          "command": "setWindowSize",
+          "target": "1280x860",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "956f49b4-a07c-4c3e-8f2a-c00b155ea198",
+          "comment": "Start as a logged-out guest",
+          "command": "executeScript",
+          "target": "localStorage.clear()",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "7dedb0d2-ae45-49b8-8ec1-6bc63f20f07b",
+          "comment": "",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "c6ce2d3e-2f1c-4e71-931f-d152f656f98f",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "ac2563c4-2045-4416-82a0-0a7d04000483",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "9ea93057-0745-46c1-b3e4-04dfb7d5cac9",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//a[text()='Inventory']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "7ab1a97a-3a9f-4343-b86e-96a1344cbb08",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "ea5f7637-b022-46f6-aca3-52aeb5a398d2",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Equipment Inventory']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "0fd43ccd-d8ee-4d0b-b362-90d206e73fdf",
+          "comment": "Wait for categories to load",
+          "command": "waitForElementPresent",
+          "target": "xpath=//div[@class='filters']//option[text()='Cameras']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "cc7d2792-9471-4b51-ab5b-364903f2dcf3",
+          "comment": "Filter by Cameras category",
+          "command": "select",
+          "target": "css=.filters select",
+          "targets": [],
+          "value": "label=Cameras"
+        },
+        {
+          "id": "44d72064-8929-4bfc-acb4-c5f649fa969d",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "0f932016-893e-4b93-91cd-13e8c24a5d15",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//article[contains(@class,'item-card')]//a[text()='Canon EOS R6']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "da5604a4-7361-4252-b224-e6e3df25ba19",
+          "comment": "Search for a specific model",
+          "command": "type",
+          "target": "css=input[placeholder='Search by model or SKU...']",
+          "targets": [],
+          "value": "Sony A7"
+        },
+        {
+          "id": "bb81be67-94a9-4a41-b7d7-d904f5a169d8",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "a5a2c163-2b77-49cc-b227-19f8bc284033",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//article[contains(@class,'item-card')]//a[text()='Sony A7 IV']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "160957f7-8640-440d-a93e-ab59d4df8a74",
+          "comment": "",
+          "command": "waitForElementNotPresent",
+          "target": "xpath=//article[contains(@class,'item-card')]//a[text()='Canon EOS R6']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "c1094795-8323-4701-ac1e-4e8586818074",
+          "comment": "Open the item detail page",
+          "command": "click",
+          "target": "xpath=//article[contains(@class,'item-card')]//a[text()='Sony A7 IV']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "2eb7bf6e-5ffd-4a8b-8bdb-d7c2dade9066",
+          "comment": "",
+          "command": "pause",
+          "target": "1000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "4a4aceb7-16ac-4931-b2a4-6fe52a557b96",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//*[self::h1 or self::h2][contains(.,'Sony A7 IV')]",
+          "targets": [],
+          "value": "15000"
+        }
+      ]
+    },
+    {
+      "id": "7eb2ef3e-259d-40bc-a64d-206d9d71e530",
+      "name": "TC05 - Role-based access control",
+      "commands": [
+        {
+          "id": "e1412e42-b831-4f31-a020-61ce92b568bc",
+          "comment": "Open the site",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "79701a40-228d-404f-a02c-d4d7a5db67e1",
+          "comment": "",
+          "command": "setWindowSize",
+          "target": "1280x860",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "145ddb05-e1eb-4f7f-87a9-21258f05b897",
+          "comment": "Start as a logged-out guest",
+          "command": "executeScript",
+          "target": "localStorage.clear()",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "4f63b991-9545-4ce4-9748-0118bd6bee79",
+          "comment": "",
+          "command": "open",
+          "target": "/login",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "e8c6b623-317b-466b-8c7e-1ac3cedb580f",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "9282ba2a-3981-4ec5-8188-48a35f8d9ea7",
+          "comment": "Guest tries a protected page",
+          "command": "open",
+          "target": "/bookings",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "4ea32e4b-ece0-48f3-ab1f-68b171140687",
+          "comment": "Guest is redirected to login",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Sign In to GearVault']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "531d3eeb-afa6-4935-ad97-88fd97bd4aae",
+          "comment": "Generate a unique email for this run",
+          "command": "executeScript",
+          "target": "return 'selenium.' + Date.now() + '@test.com'",
+          "targets": [],
+          "value": "email"
+        },
+        {
+          "id": "f0cc8738-07b9-4bb0-a293-035c3b2908f7",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=//a[text()='Create account']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "1de3ec70-65b9-4d57-a657-0084eb682baf",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[text()='Create Your GearVault Account']",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "5e4864df-32f9-4eb8-b9ed-c67c17f3491b",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='text']",
+          "targets": [],
+          "value": "Selenium Tester"
+        },
+        {
+          "id": "5c87e99f-1797-4b66-9085-fc2d062bcadf",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='email']",
+          "targets": [],
+          "value": "${email}"
+        },
+        {
+          "id": "4d019751-8240-48a7-8663-ee1c10c7e0a3",
+          "comment": "",
+          "command": "type",
+          "target": "css=input[type='password']",
+          "targets": [],
+          "value": "Test@1234"
+        },
+        {
+          "id": "6abec9f9-0f87-43bc-b36b-d278edc9e5c4",
+          "comment": "",
+          "command": "click",
+          "target": "css=button[type='submit']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "ef835b0c-8986-4944-a8cb-ef28c1db42e8",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "css=.user-badge-pill",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "31f0e539-a348-42f9-9afd-a98886a12a3d",
+          "comment": "Customer has no manager menu",
+          "command": "assertElementNotPresent",
+          "target": "xpath=//a[text()='Analytics']",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "880c174d-f710-4928-9e66-3ca3abb22adf",
+          "comment": "Customer tries a manager-only page",
+          "command": "open",
+          "target": "/analytics",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "79d001a3-3c16-4dfa-b35f-9b27d7e31f0a",
+          "comment": "",
+          "command": "waitForElementVisible",
+          "target": "xpath=//h2[contains(.,'403')]",
+          "targets": [],
+          "value": "15000"
+        },
+        {
+          "id": "34f5982f-5e86-412e-9c52-3b7f6af40886",
+          "comment": "",
+          "command": "assertText",
+          "target": "xpath=//h2[contains(.,'403')]",
+          "targets": [],
+          "value": "403 — Access Denied"
+        }
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "18e42577-e7ed-43ee-99eb-f3a496a9d75e",
+      "name": "GearVault Functional Tests",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300,
+      "tests": [
+        "0dcf1a19-8e66-4736-aee1-e30c7ac6bdbf",
+        "b0cfffcf-d1e4-4ccf-a806-a104af0808ff",
+        "ced54adc-ad70-4ea9-a93a-f652f6bf3b30",
+        "bdba6421-62a5-4a0b-8f01-ae7a8d548728",
+        "7eb2ef3e-259d-40bc-a64d-206d9d71e530"
+      ]
+    }
+  ],
+  "urls": [
+    "https://d2wvsbj3dzkosr.cloudfront.net"
+  ],
+  "plugins": []
+}

@@ -312,17 +312,199 @@ aws application-autoscaling put-scaling-policy `
   --target-tracking-scaling-policy-configuration file://scratch/deploy-scale-policy.json `
   --region $Region
 
-# 9. Edge Security & Ingress Config
-Log-Step "PHASE 9" "Configuring Global WAF Web ACL, CloudFront Functions & OAC"
-# CloudFront Functions
-aws cloudfront create-function --name spa-rewrite --function-config '{"Comment":"Rewrite SPA client routes","Runtime":"cloudfront-js-2.0"}' --function-code 'function handler(event) { var request = event.request; var uri = request.uri; if (!uri.includes(".") && !uri.startsWith("/api") && !uri.startsWith("/media")) { request.uri = "/index.html"; } return request; }'
-aws cloudfront publish-function --name spa-rewrite --if-match (aws cloudfront describe-function --name spa-rewrite --query 'ETag' --output text)
+# 9. Edge Security & Ingress Config (WAF, CloudFront Functions, OAC & Multi-Origin Distribution)
+Log-Step "PHASE 9" "Configuring Global WAF Web ACL, CloudFront Functions, OAC & Distribution"
 
-aws cloudfront create-function --name strip-media --function-config '{"Comment":"Strip /media prefix","Runtime":"cloudfront-js-2.0"}' --function-code 'function handler(event) { var request = event.request; request.uri = request.uri.replace(/^\/media/, ""); return request; }'
-aws cloudfront publish-function --name strip-media --if-match (aws cloudfront describe-function --name strip-media --query 'ETag' --output text)
+# Global WAF Web ACL (CloudFront scope must be in us-east-1)
+$wafArn = ""
+$existingWaf = aws wafv2 list-web-acls --scope CLOUDFRONT --region us-east-1 2>$null | ConvertFrom-Json
+$wafObj = $existingWaf.WebACLs | Where-Object { $_.Name -eq "gearvault-waf" }
+if ($wafObj) {
+    $wafArn = $wafObj.ARN
+} else {
+    $wafInput = @"
+{
+  "Name": "gearvault-waf",
+  "Scope": "CLOUDFRONT",
+  "DefaultAction": { "Allow": {} },
+  "Rules": [
+    {
+      "Name": "AWS-AWSManagedRulesCommonRuleSet",
+      "Priority": 0,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesCommonRuleSet"
+        }
+      },
+      "OverrideAction": { "None": {} },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "gearvault-crs"
+      }
+    }
+  ],
+  "VisibilityConfig": {
+    "SampledRequestsEnabled": true,
+    "CloudWatchMetricsEnabled": true,
+    "MetricName": "gearvault-waf"
+  }
+}
+"@
+    $wafInput | Out-File -FilePath "scratch/deploy-waf-input.json" -Encoding utf8
+    $wafArn = (aws wafv2 create-web-acl --cli-input-json file://scratch/deploy-waf-input.json --region us-east-1 | ConvertFrom-Json).Summary.ARN
+}
+
+# CloudFront Functions
+$spaArn = (aws cloudfront describe-function --name spa-rewrite 2>$null | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
+if (-not $spaArn) {
+    aws cloudfront create-function --name spa-rewrite --function-config '{"Comment":"Rewrite SPA client routes","Runtime":"cloudfront-js-2.0"}' --function-code 'function handler(event) { var request = event.request; var uri = request.uri; if (!uri.includes(".") && !uri.startsWith("/api") && !uri.startsWith("/media")) { request.uri = "/index.html"; } return request; }' 2>$null | Out-Null
+    aws cloudfront publish-function --name spa-rewrite --if-match (aws cloudfront describe-function --name spa-rewrite --query 'ETag' --output text) 2>$null | Out-Null
+    $spaArn = (aws cloudfront describe-function --name spa-rewrite | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
+}
+
+$stripArn = (aws cloudfront describe-function --name strip-media 2>$null | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
+if (-not $stripArn) {
+    aws cloudfront create-function --name strip-media --function-config '{"Comment":"Strip /media prefix","Runtime":"cloudfront-js-2.0"}' --function-code 'function handler(event) { var request = event.request; request.uri = request.uri.replace(/^\/media/, ""); return request; }' 2>$null | Out-Null
+    aws cloudfront publish-function --name strip-media --if-match (aws cloudfront describe-function --name strip-media --query 'ETag' --output text) 2>$null | Out-Null
+    $stripArn = (aws cloudfront describe-function --name strip-media | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
+}
 
 # CloudFront OAC
-aws cloudfront create-origin-access-control --origin-access-control-config '{"Name":"gearvault-oac","Description":"OAC for GearVault S3","SigningProtocol":"sigv4","SigningBehavior":"always","OriginAccessControlOriginType":"s3"}'
+$oacId = (aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='gearvault-oac'].Id" --output text 2>$null)
+if (-not $oacId -or $oacId -eq "None") {
+    $oacResp = aws cloudfront create-origin-access-control --origin-access-control-config '{"Name":"gearvault-oac","Description":"OAC for GearVault S3","SigningProtocol":"sigv4","SigningBehavior":"always","OriginAccessControlOriginType":"s3"}' | ConvertFrom-Json
+    $oacId = $oacResp.OriginAccessControl.Id
+}
+
+# CloudFront Multi-Origin Distribution
+$cfDistId = (aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='GearVault Production Multi-Origin Distribution'].Id" --output text 2>$null)
+$cfDomain = ""
+if (-not $cfDistId -or $cfDistId -eq "None") {
+    $distConfig = @"
+{
+  "CallerReference": "gearvault-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())",
+  "Comment": "GearVault Production Multi-Origin Distribution",
+  "Enabled": true,
+  "WebACLId": "$wafArn",
+  "Origins": {
+    "Quantity": 3,
+    "Items": [
+      {
+        "Id": "frontend-s3",
+        "DomainName": "$FrontendBucket.s3.$Region.amazonaws.com",
+        "OriginAccessControlId": "$oacId",
+        "S3OriginConfig": { "OriginAccessIdentity": "" }
+      },
+      {
+        "Id": "media-s3",
+        "DomainName": "$MediaBucket.s3.$Region.amazonaws.com",
+        "OriginAccessControlId": "$oacId",
+        "S3OriginConfig": { "OriginAccessIdentity": "" }
+      },
+      {
+        "Id": "alb-api",
+        "DomainName": "$AlbDns",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": { "Quantity": 1, "Items": ["TLSv1.2"] },
+          "OriginReadTimeout": 30,
+          "OriginKeepaliveTimeout": 5
+        },
+        "CustomHeaders": {
+          "Quantity": 1,
+          "Items": [{ "HeaderName": "X-Origin-Verify", "HeaderValue": "$OriginVerifySecret" }]
+        }
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "frontend-s3",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"], "CachedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"] } },
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "FunctionAssociations": { "Quantity": 1, "Items": [{ "FunctionARN": "$spaArn", "EventType": "viewer-request" }] },
+    "Compress": true
+  },
+  "CacheBehaviors": {
+    "Quantity": 2,
+    "Items": [
+      {
+        "PathPattern": "/api/*",
+        "TargetOriginId": "alb-api",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": { "Quantity": 7, "Items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"], "CachedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"] } },
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+        "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+        "Compress": true
+      },
+      {
+        "PathPattern": "/media/*",
+        "TargetOriginId": "media-s3",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "AllowedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"], "CachedMethods": { "Quantity": 2, "Items": ["GET", "HEAD"] } },
+        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+        "FunctionAssociations": { "Quantity": 1, "Items": [{ "FunctionARN": "$stripArn", "EventType": "viewer-request" }] },
+        "Compress": true
+      }
+    ]
+  }
+}
+"@
+    $distConfig | Out-File -FilePath "scratch/deploy-cf-dist.json" -Encoding utf8
+    $distResp = aws cloudfront create-distribution --distribution-config file://scratch/deploy-cf-dist.json | ConvertFrom-Json
+    $cfDistId = $distResp.Distribution.Id
+    $cfDomain = $distResp.Distribution.DomainName
+} else {
+    $cfDomain = (aws cloudfront get-distribution --id $cfDistId | ConvertFrom-Json).Distribution.DomainName
+}
+
+# Attach S3 bucket policies for CloudFront OAC access
+$s3OacPolicy = @"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCloudFrontOAC",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::$FrontendBucket/*",
+      "Condition": { "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::$AccountId`:distribution/$cfDistId" } }
+    },
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::$FrontendBucket/*"
+    }
+  ]
+}
+"@
+$s3OacPolicy | Out-File -FilePath "scratch/deploy-frontend-oac.json" -Encoding utf8
+aws s3api put-bucket-policy --bucket $FrontendBucket --policy file://scratch/deploy-frontend-oac.json 2>$null | Out-Null
+
+$mediaOacPolicy = @"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCloudFrontOAC",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::$MediaBucket/*",
+      "Condition": { "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::$AccountId`:distribution/$cfDistId" } }
+    }
+  ]
+}
+"@
+$mediaOacPolicy | Out-File -FilePath "scratch/deploy-media-oac.json" -Encoding utf8
+aws s3api put-bucket-policy --bucket $MediaBucket --policy file://scratch/deploy-media-oac.json 2>$null | Out-Null
 
 # 10. Background Automation Tier (Amazon EventBridge Scheduler)
 Log-Step "PHASE 10" "Creating EventBridge Scheduler Role & 5-Minute Recurring Job"
@@ -387,13 +569,20 @@ aws cloudwatch put-metric-alarm `
   --alarm-actions $sns `
   --region $Region
 
-# Build Frontend
+# Build Frontend (using relative /api for unified CloudFront CDN origin proxying)
 Set-Location frontend
-"VITE_API_URL=http://$AlbDns/api" | Out-File -FilePath ".env.production" -Encoding utf8
+"VITE_API_URL=/api" | Out-File -FilePath ".env.production" -Encoding utf8
 npm run build
 aws s3 sync dist/ "s3://$FrontendBucket" --delete --region $Region
 Set-Location ..
 
-Write-Host "`nDEPLOYMENT COMPLETE!" -ForegroundColor Green
-Write-Host "Live Frontend URL: http://$FrontendBucket.s3-website.$Region.amazonaws.com" -ForegroundColor Cyan
-Write-Host "Live ALB Endpoint: http://$AlbDns/api/health" -ForegroundColor Cyan
+Write-Host "`n========================================================" -ForegroundColor Green
+Write-Host "                DEPLOYMENT COMPLETE!                    " -ForegroundColor Green
+Write-Host "========================================================" -ForegroundColor Green
+if ($cfDomain) {
+    Write-Host "🚀 Live CloudFront URL (Primary): https://$cfDomain" -ForegroundColor Green
+}
+Write-Host "🌐 S3 Website Hosting: http://$FrontendBucket.s3-website.$Region.amazonaws.com" -ForegroundColor Cyan
+Write-Host "🔌 Direct ALB Endpoint: http://$AlbDns/api/health" -ForegroundColor Cyan
+Write-Host "📦 Equipment seeded: 11 items with authentic product photos" -ForegroundColor Yellow
+

@@ -99,8 +99,31 @@ Log-Step "7/11" "Force-Deleting Secrets Manager Secrets"
 aws secretsmanager delete-secret --secret-id "gearvault/production/credentials" --force-delete-without-recovery --region $Region 2>$null
 aws secretsmanager delete-secret --secret-id "gearvault/origin-verify-secret" --force-delete-without-recovery --region $Region 2>$null
 
-# 8. Edge Security & CloudFront Functions
-Log-Step "8/11" "Deleting CloudFront Functions, OAC & WAF Web ACL"
+# 8. Edge Security & CloudFront
+Log-Step "8/11" "Deleting CloudFront Distribution, Functions, OAC & WAF Web ACL"
+$cfDistList = aws cloudfront list-distributions --query "DistributionList.Items[?Comment=='GearVault Production Multi-Origin Distribution'].Id" --output text 2>$null
+if ($cfDistList) {
+    foreach ($distId in $cfDistList.Split(" `t`n`r", [System.StringSplitOptions]::RemoveEmptyEntries)) {
+        Write-Host "Checking CloudFront distribution $distId status..."
+        $dist = aws cloudfront get-distribution --id $distId 2>$null | ConvertFrom-Json
+        if ($dist) {
+            if ($dist.Distribution.DistributionConfig.Enabled) {
+                Write-Host "Disabling distribution $distId..."
+                $cfg = $dist.Distribution.DistributionConfig
+                $cfg.Enabled = $false
+                $cfgJson = $cfg | ConvertTo-Json -Depth 10
+                $cfgJson | Out-File -FilePath "scratch/cf-disable-$distId.json" -Encoding utf8
+                aws cloudfront update-distribution --id $distId --distribution-config "file://scratch/cf-disable-$distId.json" --if-match $dist.ETag 2>$null | Out-Null
+            }
+            Write-Host "Waiting for CloudFront distribution $distId to deploy disablement..."
+            aws cloudfront wait distribution-deployed --id $distId 2>$null
+            $delEtag = (aws cloudfront get-distribution --id $distId 2>$null | ConvertFrom-Json).ETag
+            Write-Host "Deleting distribution $distId..."
+            aws cloudfront delete-distribution --id $distId --if-match $delEtag 2>$null
+        }
+    }
+}
+
 $spaEtag = aws cloudfront describe-function --name spa-rewrite --query 'ETag' --output text 2>$null
 if ($spaEtag) { aws cloudfront delete-function --name spa-rewrite --if-match $spaEtag 2>$null }
 
@@ -109,8 +132,10 @@ if ($stripEtag) { aws cloudfront delete-function --name strip-media --if-match $
 
 $oacList = aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='gearvault-oac'].Id" --output text 2>$null
 if ($oacList) {
-    $oacEtag = aws cloudfront get-origin-access-control --id $oacList --query 'ETag' --output text 2>$null
-    aws cloudfront delete-origin-access-control --id $oacList --if-match $oacEtag 2>$null
+    foreach ($oacId in $oacList.Split(" `t`n`r", [System.StringSplitOptions]::RemoveEmptyEntries)) {
+        $oacEtag = aws cloudfront get-origin-access-control --id $oacId --query 'ETag' --output text 2>$null
+        aws cloudfront delete-origin-access-control --id $oacId --if-match $oacEtag 2>$null
+    }
 }
 
 $wafList = aws wafv2 list-web-acls --scope CLOUDFRONT --region $WafRegion | ConvertFrom-Json
