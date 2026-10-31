@@ -391,7 +391,7 @@ if ($wafObj) {
 }
 
 # CloudFront Functions
-$spaArn = (aws cloudfront list-functions --query "FunctionList.Items[?Name=='spa-rewrite'].FunctionMetadata.FunctionARN" --output text 2>$null)
+$spaArn = (aws cloudfront list-functions --query "FunctionList.Items[?Name=='spa-rewrite' && FunctionMetadata.Stage=='LIVE'].FunctionMetadata.FunctionARN" --output text 2>$null)
 if (-not $spaArn -or $spaArn -eq "None") {
     $spaCode = @"
 function handler(event) {
@@ -410,7 +410,7 @@ function handler(event) {
     $spaArn = $spaPublish.FunctionSummary.FunctionMetadata.FunctionARN
 }
 
-$stripArn = (aws cloudfront list-functions --query "FunctionList.Items[?Name=='strip-media'].FunctionMetadata.FunctionARN" --output text 2>$null)
+$stripArn = (aws cloudfront list-functions --query "FunctionList.Items[?Name=='strip-media' && FunctionMetadata.Stage=='LIVE'].FunctionMetadata.FunctionARN" --output text 2>$null)
 if (-not $stripArn -or $stripArn -eq "None") {
     $stripCode = @"
 function handler(event) {
@@ -600,6 +600,7 @@ Log-Step "PHASE 11" "Creating SNS Topic, CloudWatch Alarms, Building & Syncing F
 $sns = (aws sns create-topic --name gearvault-alerts --region $Region | ConvertFrom-Json).TopicArn
 
 # Alarms
+$albDimension = ($AlbArn -split 'loadbalancer/')[1]
 aws cloudwatch put-metric-alarm `
   --alarm-name "GearVault-High-5XX-Errors" `
   --metric-name HTTPCode_Target_5XX_Count `
@@ -609,7 +610,7 @@ aws cloudwatch put-metric-alarm `
   --evaluation-periods 1 `
   --threshold 10 `
   --comparison-operator GreaterThanThreshold `
-  --dimensions Name=LoadBalancer,Value=$alb.LoadBalancerName `
+  --dimensions Name=LoadBalancer,Value=$albDimension `
   --alarm-actions $sns `
   --region $Region
 
@@ -632,7 +633,7 @@ if (-not (Test-Path "node_modules")) {
     Write-Host "Installing frontend dependencies (npm install)..." -ForegroundColor Cyan
     npm install
 }
-"VITE_API_URL=/api" | Out-File -FilePath ".env.production" -Encoding utf8
+[System.IO.File]::WriteAllText(".env.production", "VITE_API_URL=/api`n", (New-Object System.Text.UTF8Encoding($false)))
 npm run build
 if (-not (Test-Path "dist")) {
     throw "Frontend build failed: dist directory was not created!"
