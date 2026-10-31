@@ -306,6 +306,41 @@ Write-JsonFile "scratch/deploy-seed-overrides.json" $seedOverrides
 $seedTask = aws ecs run-task --cluster gearvault --task-definition gearvault-api --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$appA],securityGroups=[$appSg],assignPublicIp=DISABLED}" --overrides file://scratch/deploy-seed-overrides.json --region $Region | ConvertFrom-Json
 aws ecs wait tasks-stopped --cluster gearvault --tasks $seedTask.tasks[0].taskArn --region $Region
 
+Write-Host "Creating default application users (Customer, Staff, Admin)..."
+$createUserCode = @"
+from app import create_app, db
+from app.models import User, Role
+app = create_app()
+with app.app_context():
+    users_data = [
+        ('customer@gearvault.com', 'Customer User', 'customer', 'CustomerPass123!'),
+        ('staff@gearvault.com', 'Staff User', 'staff', 'StaffPass123!'),
+        ('admin@gearvault.com', 'Admin User', 'manager', 'AdminPass123!'),
+    ]
+    for email, name, role_name, pwd in users_data:
+        role = Role.query.filter_by(name=role_name).first()
+        u = User.query.filter_by(email=email).first()
+        if not u:
+            u = User(email=email, full_name=name, role_id=role.id)
+            u.set_password(pwd)
+            db.session.add(u)
+        else:
+            u.role_id = role.id
+            u.set_password(pwd)
+    db.session.commit()
+"@
+$userOverrides = @{
+    containerOverrides = @(
+        @{
+            name = "api"
+            command = @("python", "-c", $createUserCode)
+        }
+    )
+} | ConvertTo-Json -Depth 5
+Write-JsonFile "scratch/deploy-users-overrides.json" $userOverrides
+$userTask = aws ecs run-task --cluster gearvault --task-definition gearvault-api --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$appA],securityGroups=[$appSg],assignPublicIp=DISABLED}" --overrides file://scratch/deploy-users-overrides.json --region $Region | ConvertFrom-Json
+aws ecs wait tasks-stopped --cluster gearvault --tasks $userTask.tasks[0].taskArn --region $Region
+
 # 8. ECS Fargate Service & Auto Scaling
 Log-Step "PHASE 8" "Creating ECS Service with Circuit Breaker & Target Tracking Auto Scaling"
 aws ecs create-service `
