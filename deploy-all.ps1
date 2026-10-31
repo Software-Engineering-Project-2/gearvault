@@ -173,7 +173,8 @@ $DbEndpoint = $rdsDesc.DBInstances[0].Endpoint.Address
 Log-Step "PHASE 4" "Creating Secrets Manager Secrets"
 $dbUrl = "postgresql://gearvault_admin:$DbPassword@${DbEndpoint}:5432/gearvault?sslmode=require"
 $credsObj = @{ DATABASE_URL = $dbUrl; JWT_SECRET_KEY = $JwtSecret } | ConvertTo-Json -Compress
-aws secretsmanager create-secret --name "gearvault/production/credentials" --secret-string $credsObj --region $Region
+Write-JsonFile "scratch/deploy-secret.json" $credsObj
+aws secretsmanager create-secret --name "gearvault/production/credentials" --secret-string file://scratch/deploy-secret.json --region $Region
 aws secretsmanager create-secret --name "gearvault/origin-verify-secret" --secret-string $OriginVerifySecret --region $Region
 
 # 5. Ingress Tier (Application Load Balancer)
@@ -390,24 +391,47 @@ if ($wafObj) {
 }
 
 # CloudFront Functions
-$spaArn = (aws cloudfront describe-function --name spa-rewrite 2>$null | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
-if (-not $spaArn) {
-    aws cloudfront create-function --name spa-rewrite --function-config '{"Comment":"Rewrite SPA client routes","Runtime":"cloudfront-js-2.0"}' --function-code 'function handler(event) { var request = event.request; var uri = request.uri; if (!uri.includes(".") && !uri.startsWith("/api") && !uri.startsWith("/media")) { request.uri = "/index.html"; } return request; }' 2>$null | Out-Null
-    aws cloudfront publish-function --name spa-rewrite --if-match (aws cloudfront describe-function --name spa-rewrite --query 'ETag' --output text) 2>$null | Out-Null
-    $spaArn = (aws cloudfront describe-function --name spa-rewrite | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
+$spaArn = (aws cloudfront list-functions --query "FunctionList.Items[?Name=='spa-rewrite'].FunctionMetadata.FunctionARN" --output text 2>$null)
+if (-not $spaArn -or $spaArn -eq "None") {
+    $spaCode = @"
+function handler(event) {
+    var request = event.request;
+    var uri = request.uri;
+    if (!uri.includes(".") && !uri.startsWith("/api") && !uri.startsWith("/media")) {
+        request.uri = "/index.html";
+    }
+    return request;
+}
+"@
+    [System.IO.File]::WriteAllText((Join-Path $ScratchDir "deploy-spa-rewrite.js"), $spaCode)
+    Write-JsonFile "scratch/deploy-spa-cfg.json" '{"Comment":"Rewrite SPA client routes","Runtime":"cloudfront-js-2.0"}'
+    $cfn = aws cloudfront create-function --name spa-rewrite --function-config file://scratch/deploy-spa-cfg.json --function-code fileb://scratch/deploy-spa-rewrite.js | ConvertFrom-Json
+    $spaPublish = aws cloudfront publish-function --name spa-rewrite --if-match $cfn.ETag | ConvertFrom-Json
+    $spaArn = $spaPublish.FunctionSummary.FunctionMetadata.FunctionARN
 }
 
-$stripArn = (aws cloudfront describe-function --name strip-media 2>$null | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
-if (-not $stripArn) {
-    aws cloudfront create-function --name strip-media --function-config '{"Comment":"Strip /media prefix","Runtime":"cloudfront-js-2.0"}' --function-code 'function handler(event) { var request = event.request; request.uri = request.uri.replace(/^\/media/, ""); return request; }' 2>$null | Out-Null
-    aws cloudfront publish-function --name strip-media --if-match (aws cloudfront describe-function --name strip-media --query 'ETag' --output text) 2>$null | Out-Null
-    $stripArn = (aws cloudfront describe-function --name strip-media | ConvertFrom-Json).FunctionSummary.FunctionMetadata.FunctionARN
+$stripArn = (aws cloudfront list-functions --query "FunctionList.Items[?Name=='strip-media'].FunctionMetadata.FunctionARN" --output text 2>$null)
+if (-not $stripArn -or $stripArn -eq "None") {
+    $stripCode = @"
+function handler(event) {
+    var request = event.request;
+    request.uri = request.uri.replace(/^\/media/, "");
+    return request;
+}
+"@
+    [System.IO.File]::WriteAllText((Join-Path $ScratchDir "deploy-strip-media.js"), $stripCode)
+    Write-JsonFile "scratch/deploy-strip-cfg.json" '{"Comment":"Strip /media prefix","Runtime":"cloudfront-js-2.0"}'
+    $cfn = aws cloudfront create-function --name strip-media --function-config file://scratch/deploy-strip-cfg.json --function-code fileb://scratch/deploy-strip-media.js | ConvertFrom-Json
+    $stripPublish = aws cloudfront publish-function --name strip-media --if-match $cfn.ETag | ConvertFrom-Json
+    $stripArn = $stripPublish.FunctionSummary.FunctionMetadata.FunctionARN
 }
 
 # CloudFront OAC
 $oacId = (aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='gearvault-oac'].Id" --output text 2>$null)
 if (-not $oacId -or $oacId -eq "None") {
-    $oacResp = aws cloudfront create-origin-access-control --origin-access-control-config '{"Name":"gearvault-oac","Description":"OAC for GearVault S3","SigningProtocol":"sigv4","SigningBehavior":"always","OriginAccessControlOriginType":"s3"}' | ConvertFrom-Json
+    $oacConfig = '{"Name":"gearvault-oac","Description":"OAC for GearVault S3","SigningProtocol":"sigv4","SigningBehavior":"always","OriginAccessControlOriginType":"s3"}'
+    Write-JsonFile "scratch/deploy-oac-config.json" $oacConfig
+    $oacResp = aws cloudfront create-origin-access-control --origin-access-control-config file://scratch/deploy-oac-config.json | ConvertFrom-Json
     $oacId = $oacResp.OriginAccessControl.Id
 }
 
@@ -506,7 +530,7 @@ $s3OacPolicy = @"
       "Principal": { "Service": "cloudfront.amazonaws.com" },
       "Action": "s3:GetObject",
       "Resource": "arn:aws:s3:::$FrontendBucket/*",
-      "Condition": { "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::$AccountId`:distribution/$cfDistId" } }
+      "Condition": { "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::${AccountId}:distribution/$cfDistId" } }
     },
     {
       "Sid": "PublicReadGetObject",
@@ -531,7 +555,7 @@ $mediaOacPolicy = @"
       "Principal": { "Service": "cloudfront.amazonaws.com" },
       "Action": "s3:GetObject",
       "Resource": "arn:aws:s3:::$MediaBucket/*",
-      "Condition": { "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::$AccountId`:distribution/$cfDistId" } }
+      "Condition": { "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::${AccountId}:distribution/$cfDistId" } }
     }
   ]
 }
@@ -552,8 +576,8 @@ aws iam put-role-policy --role-name gearvault-scheduler-role --policy-name Sched
 
 $schedTarget = @"
 {
-  "Arn": "arn:aws:ecs:$Region`:$AccountId`:cluster/gearvault",
-  "RoleArn": "arn:aws:iam::$AccountId`:role/gearvault-scheduler-role",
+  "Arn": "arn:aws:ecs:${Region}:${AccountId}:cluster/gearvault",
+  "RoleArn": "arn:aws:iam::${AccountId}:role/gearvault-scheduler-role",
   "Input": "{\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"flask\",\"jobs\",\"run\"]}]}",
   "EcsParameters": {
     "TaskDefinitionArn": "arn:aws:ecs:$Region`:$AccountId`:task-definition/gearvault-api",
