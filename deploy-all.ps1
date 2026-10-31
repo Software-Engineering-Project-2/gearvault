@@ -37,6 +37,11 @@ if (-not (Test-Path $ScratchDir)) {
     New-Item -ItemType Directory -Path $ScratchDir -Force | Out-Null
 }
 
+function Write-JsonFile([string]$path, [string]$content) {
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
+}
+
 function Log-Step($phase, $msg) {
     Write-Host "`n========================================================" -ForegroundColor Cyan
     Write-Host " [$phase] $msg" -ForegroundColor Green
@@ -134,7 +139,7 @@ $frontendPolicy = @"
   ]
 }
 "@
-$frontendPolicy | Out-File -FilePath "scratch/deploy-frontend-policy.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-frontend-policy.json" $frontendPolicy
 aws s3api put-bucket-policy --bucket $FrontendBucket --policy file://scratch/deploy-frontend-policy.json
 
 # 3. Database Tier (Amazon RDS Multi-AZ)
@@ -191,7 +196,7 @@ $EcrUri = "$AccountId.dkr.ecr.$Region.amazonaws.com/gearvault-api"
 
 # IAM Roles
 $execTrust = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-$execTrust | Out-File -FilePath "scratch/deploy-task-trust.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-task-trust.json" $execTrust
 aws iam create-role --role-name gearvault-task-exec --assume-role-policy-document file://scratch/deploy-task-trust.json
 aws iam attach-role-policy --role-name gearvault-task-exec --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
@@ -207,12 +212,27 @@ $execInline = @"
   ]
 }
 "@
-$execInline | Out-File -FilePath "scratch/deploy-exec-inline.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-exec-inline.json" $execInline
 aws iam put-role-policy --role-name gearvault-task-exec --policy-name SecretsAndLogsAccess --policy-document file://scratch/deploy-exec-inline.json
 
 aws iam create-role --role-name gearvault-task --assume-role-policy-document file://scratch/deploy-task-trust.json
 
 # Docker Build & Push
+Write-Host "Verifying Docker daemon connectivity..."
+$dockerReady = $false
+for ($i = 0; $i -lt 30; $i++) {
+    docker info 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $dockerReady = $true
+        break
+    }
+    Write-Host "Waiting for Docker Desktop daemon to start (attempt $($i+1)/30)..."
+    Start-Sleep -Seconds 3
+}
+if (-not $dockerReady) {
+    throw "Docker daemon is not running! Please start Docker Desktop on your machine and re-run."
+}
+
 aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin "$AccountId.dkr.ecr.$Region.amazonaws.com"
 docker build --platform linux/amd64 -t "$EcrUri`:v2" backend
 docker push "$EcrUri`:v2"
@@ -229,8 +249,8 @@ $tdJson = @"
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::$AccountId:role/gearvault-task-exec",
-  "taskRoleArn": "arn:aws:iam::$AccountId:role/gearvault-task",
+  "executionRoleArn": "arn:aws:iam::${AccountId}:role/gearvault-task-exec",
+  "taskRoleArn": "arn:aws:iam::${AccountId}:role/gearvault-task",
   "containerDefinitions": [
     {
       "name": "api",
@@ -269,16 +289,20 @@ $tdJson = @"
   ]
 }
 "@
-$tdJson | Out-File -FilePath "scratch/deploy-td.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-td.json" $tdJson
 aws ecs register-task-definition --cli-input-json file://scratch/deploy-td.json --region $Region
 
 # Run Migration & Seed
 Write-Host "Running database migrations..."
-$migTask = aws ecs run-task --cluster gearvault --task-definition gearvault-api --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$appA],securityGroups=[$appSg],assignPublicIp=DISABLED}" --overrides '{"containerOverrides":[{"name":"api","command":["flask","db","upgrade"]}]}' --region $Region | ConvertFrom-Json
+$migOverrides = '{"containerOverrides":[{"name":"api","command":["flask","db","upgrade"]}]}'
+Write-JsonFile "scratch/deploy-mig-overrides.json" $migOverrides
+$migTask = aws ecs run-task --cluster gearvault --task-definition gearvault-api --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$appA],securityGroups=[$appSg],assignPublicIp=DISABLED}" --overrides file://scratch/deploy-mig-overrides.json --region $Region | ConvertFrom-Json
 aws ecs wait tasks-stopped --cluster gearvault --tasks $migTask.tasks[0].taskArn --region $Region
 
 Write-Host "Running database canonical seed..."
-$seedTask = aws ecs run-task --cluster gearvault --task-definition gearvault-api --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$appA],securityGroups=[$appSg],assignPublicIp=DISABLED}" --overrides '{"containerOverrides":[{"name":"api","command":["flask","seed"]}]}' --region $Region | ConvertFrom-Json
+$seedOverrides = '{"containerOverrides":[{"name":"api","command":["flask","seed"]}]}'
+Write-JsonFile "scratch/deploy-seed-overrides.json" $seedOverrides
+$seedTask = aws ecs run-task --cluster gearvault --task-definition gearvault-api --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$appA],securityGroups=[$appSg],assignPublicIp=DISABLED}" --overrides file://scratch/deploy-seed-overrides.json --region $Region | ConvertFrom-Json
 aws ecs wait tasks-stopped --cluster gearvault --tasks $seedTask.tasks[0].taskArn --region $Region
 
 # 8. ECS Fargate Service & Auto Scaling
@@ -311,7 +335,7 @@ $scalePolicy = @"
   "ScaleInCooldown": 300
 }
 "@
-$scalePolicy | Out-File -FilePath "scratch/deploy-scale-policy.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-scale-policy.json" $scalePolicy
 aws application-autoscaling put-scaling-policy `
   --policy-name ecs-cpu-target-tracking `
   --service-namespace ecs `
@@ -361,7 +385,7 @@ if ($wafObj) {
   }
 }
 "@
-    $wafInput | Out-File -FilePath "scratch/deploy-waf-input.json" -Encoding utf8
+    Write-JsonFile "scratch/deploy-waf-input.json" $wafInput
     $wafArn = (aws wafv2 create-web-acl --cli-input-json file://scratch/deploy-waf-input.json --region us-east-1 | ConvertFrom-Json).Summary.ARN
 }
 
@@ -463,7 +487,7 @@ if (-not $cfDistId -or $cfDistId -eq "None") {
   }
 }
 "@
-    $distConfig | Out-File -FilePath "scratch/deploy-cf-dist.json" -Encoding utf8
+    Write-JsonFile "scratch/deploy-cf-dist.json" $distConfig
     $distResp = aws cloudfront create-distribution --distribution-config file://scratch/deploy-cf-dist.json | ConvertFrom-Json
     $cfDistId = $distResp.Distribution.Id
     $cfDomain = $distResp.Distribution.DomainName
@@ -494,7 +518,7 @@ $s3OacPolicy = @"
   ]
 }
 "@
-$s3OacPolicy | Out-File -FilePath "scratch/deploy-frontend-oac.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-frontend-oac.json" $s3OacPolicy
 aws s3api put-bucket-policy --bucket $FrontendBucket --policy file://scratch/deploy-frontend-oac.json 2>$null | Out-Null
 
 $mediaOacPolicy = @"
@@ -512,18 +536,18 @@ $mediaOacPolicy = @"
   ]
 }
 "@
-$mediaOacPolicy | Out-File -FilePath "scratch/deploy-media-oac.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-media-oac.json" $mediaOacPolicy
 aws s3api put-bucket-policy --bucket $MediaBucket --policy file://scratch/deploy-media-oac.json 2>$null | Out-Null
 
 # 10. Background Automation Tier (Amazon EventBridge Scheduler)
 Log-Step "PHASE 10" "Creating EventBridge Scheduler Role & 5-Minute Recurring Job"
 $schedTrust = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"scheduler.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-$schedTrust | Out-File -FilePath "scratch/deploy-sched-trust.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-sched-trust.json" $schedTrust
 aws iam create-role --role-name gearvault-scheduler-role --assume-role-policy-document file://scratch/deploy-sched-trust.json
 aws iam attach-role-policy --role-name gearvault-scheduler-role --policy-arn arn:aws:iam::aws:policy/AmazonECS_FullAccess
 
 $schedPassRole = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"iam:PassRole","Resource":"arn:aws:iam::' + $AccountId + ':role/gearvault-task*"}]}'
-$schedPassRole | Out-File -FilePath "scratch/deploy-sched-passrole.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-sched-passrole.json" $schedPassRole
 aws iam put-role-policy --role-name gearvault-scheduler-role --policy-name SchedulerPassRole --policy-document file://scratch/deploy-sched-passrole.json
 
 $schedTarget = @"
@@ -544,7 +568,7 @@ $schedTarget = @"
   }
 }
 "@
-$schedTarget | Out-File -FilePath "scratch/deploy-sched-target.json" -Encoding utf8
+Write-JsonFile "scratch/deploy-sched-target.json" $schedTarget
 aws scheduler create-schedule --name gearvault-run-jobs --schedule-expression "rate(5 minutes)" --flexible-time-window Mode=OFF --target file://scratch/deploy-sched-target.json --region $Region
 
 # 11. Observability Tier & Frontend Deployment
